@@ -7,7 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.7"/>
+        <PackageReference Include="MassTransit.RabbitMQ" Version="[8.5.7]" />
         <ProjectReference Include="..\..\src\MassTransit.PostgresOutbox\MassTransit.PostgresOutbox.csproj"/>
     </ItemGroup>
 
