@@ -21,9 +21,9 @@ internal class OutboxMessagePublisherService<TDbContext>(
    private readonly int _batchCount = settings.PublisherBatchCount;
    private readonly PeriodicTimer _timer = new(settings.PublisherTimerPeriod);
 
-   protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+   protected override async Task ExecuteAsync(CancellationToken stoppingToken)
    {
-      while (await _timer.WaitForNextTickAsync(cancellationToken))
+      while (await _timer.WaitForNextTickAsync(stoppingToken))
       {
          logger.LogDebug($"{nameof(OutboxMessagePublisherService<TDbContext>)} started iteration");
 
@@ -32,7 +32,7 @@ internal class OutboxMessagePublisherService<TDbContext>(
          var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
          await using var transactionScope =
             await dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted,
-               cancellationToken);
+               stoppingToken);
 
          try
          {
@@ -41,7 +41,7 @@ internal class OutboxMessagePublisherService<TDbContext>(
                                           .OrderBy(x => x.CreatedAt)
                                           .ForUpdate(LockBehavior.SkipLocked)
                                           .Take(_batchCount)
-                                          .ToListAsync(cancellationToken);
+                                          .ToListAsync(stoppingToken);
 
             if (messages.Count == 0)
             {
@@ -61,7 +61,7 @@ internal class OutboxMessagePublisherService<TDbContext>(
                   await publishEndpoint.Publish(messageObject!,
                      type!,
                      x => x.Headers.Set(Constants.OutboxMessageId, message.Id),
-                     cancellationToken);
+                     stoppingToken);
 
                   publishedMessageIds.Add(message.Id);
                }
@@ -82,15 +82,15 @@ internal class OutboxMessagePublisherService<TDbContext>(
                            .Where(b => publishedMessageIds.Contains(b.Id))
                            .ExecuteUpdateAsync(x => x.SetProperty(m => m.State, MessageState.Done)
                                                      .SetProperty(m => m.UpdatedAt, utcNow),
-                              cancellationToken);
+                              stoppingToken);
 
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await transactionScope.CommitAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(stoppingToken);
+            await transactionScope.CommitAsync(stoppingToken);
          }
          catch (Exception ex)
          {
             logger.LogError(ex, ex.Message);
-            await transactionScope.RollbackAsync(cancellationToken);
+            await transactionScope.RollbackAsync(stoppingToken);
          }
 
          logger.LogDebug($"{nameof(OutboxMessagePublisherService<TDbContext>)} finished iteration");

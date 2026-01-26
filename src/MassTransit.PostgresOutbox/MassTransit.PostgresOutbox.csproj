@@ -8,13 +8,13 @@
         <PackageReadmeFile>Readme.md</PackageReadmeFile>
         <Authors>Pandatech</Authors>
         <Copyright>MIT</Copyright>
-        <Version>4.0.0</Version>
+        <Version>4.0.1</Version>
         <PackageId>Pandatech.MassTransit.PostgresOutbox</PackageId>
         <Title>Pandatech MassTransit PostgreSQL Outbox Extension</Title>
         <PackageTags>Pandatech, library, postgres, distributed systems, microservices, modular monolith, messaging, efcore, mass transit, outbox pattern, inbox pattern</PackageTags>
         <Description>Pandatech.MassTransit.PostgresOutbox extends MassTransit to offer advanced message handling capabilities for distributed systems. With first-class support for multiple DbContexts, this library integrates seamlessly with Entity Framework Core and PostgreSQL, providing reliable Outbox and Inbox patterns. It ensures consistent message delivery and processing in complex microservices architectures, leveraging PostgreSQL's ForUpdate feature to handle concurrency with ease.</Description>
         <RepositoryUrl>https://github.com/PandaTechAM/be-lib-pandatech-masstransit-postgres-outbox</RepositoryUrl>
-        <PackageReleaseNotes>Dotnet 10 upgrade</PackageReleaseNotes>
+        <PackageReleaseNotes>nuget updates</PackageReleaseNotes>
 
         <!-- Never run analyzers as part of compilation (local, CI, dotnet build/test/publish) -->
         <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
@@ -32,11 +32,11 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="MassTransit" Version="8.5.7"/>
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1"/>
+        <PackageReference Include="MassTransit" Version = "[8.5.7]" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
         <PackageReference Include="Pandatech.EFCore.PostgresExtensions" Version="6.0.0"/>
-        <PackageReference Include="Pandatech.Analyzers" Version="1.6.0"/>
-        <PackageReference Include="SonarAnalyzer.CSharp" Version="10.17.0.131074">
+        <PackageReference Include="Pandatech.Analyzers" Version="2.1.0" />
+        <PackageReference Include="SonarAnalyzer.CSharp" Version="10.18.0.131500">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>

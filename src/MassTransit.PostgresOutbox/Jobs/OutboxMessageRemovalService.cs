@@ -17,11 +17,11 @@ internal class OutboxMessageRemovalService<TDbContext>(
    private readonly int _beforeInDays = settings.OutboxRemovalBeforeInDays;
    private readonly PeriodicTimer _timer = new(settings.OutboxRemovalTimerPeriod);
 
-   protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+   protected override async Task ExecuteAsync(CancellationToken stoppingToken)
    {
-      while (await _timer.WaitForNextTickAsync(cancellationToken))
+      while (await _timer.WaitForNextTickAsync(stoppingToken))
       {
-         logger.LogDebug($"{nameof(OutboxMessageRemovalService<TDbContext>)} started iteration");
+         logger.LogDebug($"{nameof(OutboxMessageRemovalService<>)} started iteration");
 
          using var scope = serviceScopeFactory.CreateScope();
          await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
@@ -33,7 +33,7 @@ internal class OutboxMessageRemovalService<TDbContext>(
             await dbContext.OutboxMessages
                            .Where(x => x.State == MessageState.Done)
                            .Where(x => x.UpdatedAt < daysBefore)
-                           .ExecuteDeleteAsync(cancellationToken);
+                           .ExecuteDeleteAsync(stoppingToken);
          }
          catch (Exception ex)
          {
