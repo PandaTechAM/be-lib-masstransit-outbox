@@ -9,7 +9,7 @@ public static class ServiceCollectionExtensions
 {
    extension(IServiceCollection services)
    {
-      public IServiceCollection AddOutboxInboxServices<TDbContext>(Settings settings = null!)
+      public IServiceCollection AddOutboxInboxServices<TDbContext>(Settings? settings = null)
          where TDbContext : DbContext, IOutboxDbContext, IInboxDbContext
       {
          return services.AddSettings(settings)
@@ -18,7 +18,7 @@ public static class ServiceCollectionExtensions
                         .AddHostedService<InboxMessageRemovalService<TDbContext>>();
       }
 
-      public IServiceCollection AddOutboxPublisherJob<TDbContext>(Settings settings = null!)
+      public IServiceCollection AddOutboxPublisherJob<TDbContext>(Settings? settings = null)
          where TDbContext : DbContext, IOutboxDbContext
       {
          services.AddSettings(settings);
@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
          return services;
       }
 
-      public IServiceCollection AddOutboxRemovalJob<TDbContext>(Settings settings = null!)
+      public IServiceCollection AddOutboxRemovalJob<TDbContext>(Settings? settings = null)
          where TDbContext : DbContext, IOutboxDbContext
       {
          services.AddSettings(settings);
@@ -34,7 +34,7 @@ public static class ServiceCollectionExtensions
          return services;
       }
 
-      public IServiceCollection AddInboxRemovalJob<TDbContext>(Settings settings = null!)
+      public IServiceCollection AddInboxRemovalJob<TDbContext>(Settings? settings = null)
          where TDbContext : DbContext, IInboxDbContext
       {
          services.AddSettings(settings);
@@ -42,12 +42,10 @@ public static class ServiceCollectionExtensions
          return services;
       }
 
-      public IServiceCollection AddSettings(Settings settings)
+      public IServiceCollection AddSettings(Settings? settings)
       {
          settings ??= new Settings();
-
          services.AddSingleton(settings);
-
          return services;
       }
    }
