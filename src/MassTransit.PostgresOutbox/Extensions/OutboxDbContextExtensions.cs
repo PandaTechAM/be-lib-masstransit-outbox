@@ -23,4 +23,22 @@ public static class OutboxDbContextExtensions
 
       return entity.Id;
    }
+   public static IReadOnlyList<Guid> AddToOutboxRange<T>(this IOutboxDbContext dbContext, params T[] messages)
+   {
+      var utcNow = DateTime.UtcNow;
+
+      var entities = messages.Select(message => new OutboxMessage
+      {
+         Id = Guid.NewGuid(),
+         CreatedAt = utcNow,
+         State = MessageState.New,
+         UpdatedAt = null,
+         Payload = JsonSerializer.Serialize(message),
+         Type = typeof(T).AssemblyQualifiedName!
+      }).ToList();
+
+      dbContext.OutboxMessages.AddRange(entities);
+
+      return entities.Select(x => x.Id).ToArray();
+   }
 }

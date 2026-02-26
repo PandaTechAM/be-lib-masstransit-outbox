@@ -8,7 +8,7 @@
         <PackageReadmeFile>Readme.md</PackageReadmeFile>
         <Authors>Pandatech</Authors>
         <Copyright>MIT</Copyright>
-        <Version>4.1.0</Version>
+        <Version>4.2.0</Version>
         <PackageId>Pandatech.MassTransit.PostgresOutbox</PackageId>
         <Title>Pandatech MassTransit PostgreSQL Outbox Extension</Title>
         <PackageTags>Pandatech, library, postgres, distributed systems, microservices, modular monolith, messaging, efcore, mass transit, outbox pattern, inbox pattern</PackageTags>
