@@ -1,5 +1,5 @@
 ﻿using MassTransit.PostgresOutbox.Abstractions;
-using MassTransit.PostgresOutbox.Demo.Consumer.Contexts;
+using MassTransit.PostgresOutbox.Demo.Consumer.Context;
 using MassTransit.PostgresOutbox.Demo.Shared.Events;
 using Microsoft.EntityFrameworkCore.Storage;
 

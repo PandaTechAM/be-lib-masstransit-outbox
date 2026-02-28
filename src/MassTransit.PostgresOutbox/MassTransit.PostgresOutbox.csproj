@@ -1,45 +1,28 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <PackageIcon>pandatech.png</PackageIcon>
-        <PackageReadmeFile>Readme.md</PackageReadmeFile>
-        <Authors>Pandatech</Authors>
-        <Copyright>MIT</Copyright>
-        <Version>4.2.0</Version>
         <PackageId>Pandatech.MassTransit.PostgresOutbox</PackageId>
-        <Title>Pandatech MassTransit PostgreSQL Outbox Extension</Title>
-        <PackageTags>Pandatech, library, postgres, distributed systems, microservices, modular monolith, messaging, efcore, mass transit, outbox pattern, inbox pattern</PackageTags>
-        <Description>Pandatech.MassTransit.PostgresOutbox extends MassTransit to offer advanced message handling capabilities for distributed systems. With first-class support for multiple DbContexts, this library integrates seamlessly with Entity Framework Core and PostgreSQL, providing reliable Outbox and Inbox patterns. It ensures consistent message delivery and processing in complex microservices architectures, leveraging PostgreSQL's ForUpdate feature to handle concurrency with ease.</Description>
-        <RepositoryUrl>https://github.com/PandaTechAM/be-lib-pandatech-masstransit-postgres-outbox</RepositoryUrl>
-        <PackageReleaseNotes>bug fix on extension</PackageReleaseNotes>
-
-        <!-- Never run analyzers as part of compilation (local, CI, dotnet build/test/publish) -->
-        <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
-
-        <!-- Keep background/live analysis in the IDE -->
-        <RunAnalyzersDuringLiveAnalysis>true</RunAnalyzersDuringLiveAnalysis>
-
-        <!-- Optional: ensure code-style analyzers don't run during build either -->
-        <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+        <Description>Outbox and Inbox pattern implementation for MassTransit with PostgreSQL and EF Core. Supports multiple DbContexts for modular monolith and microservice architectures. Uses PostgreSQL FOR UPDATE SKIP LOCKED for concurrency control.</Description>
+        <PackageTags>masstransit;outbox;inbox;postgresql;postgres;efcore;entity-framework;distributed-systems;modular-monolith;microservices;messaging;reliability</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="..\..\pandatech.png" Pack="true" PackagePath="\"/>
-        <None Include="..\..\Readme.md" Pack="true" PackagePath="\"/>
+        <PackageReference Include="MassTransit" Version="8.0.11"/>
+        <PackageReference Include="Pandatech.EFCore.PostgresExtensions" Version="7.0.0"/>
     </ItemGroup>
 
-    <ItemGroup>
-        <PackageReference Include="MassTransit" Version = "[8.5.7]" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
-        <PackageReference Include="Pandatech.EFCore.PostgresExtensions" Version="6.0.0"/>
-        <PackageReference Include="Pandatech.Analyzers" Version="2.1.0" />
-        <PackageReference Include="SonarAnalyzer.CSharp" Version="10.18.0.131500">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
+    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0"/>
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0"/>
+
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0"/>
+
     </ItemGroup>
 
 </Project>

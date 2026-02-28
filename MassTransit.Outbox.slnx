@@ -1,0 +1,24 @@
+<Solution>
+    <Folder Name="/Solution Items/">
+        <File Path=".editorconfig" />
+        <File Path=".github/workflows/main.yml" />
+        <File Path=".gitignore" />
+        <File Path="Directory.Build.props" />
+        <File Path="global.json" />
+        <File Path="LICENSE" />
+        <File Path="Readme.md" />
+    </Folder>
+    <Folder Name="/src/">
+        <Project Path="src/MassTransit.PostgresOutbox/MassTransit.PostgresOutbox.csproj" />
+        <Project Path="src\MassTransit.SQLiteOutbox\MassTransit.SQLiteOutbox.csproj" />
+    </Folder>
+    <Folder Name="/test/">
+        <File Path="test\Directory.Build.props" />
+        <Project Path="test/MassTransit.PostgresOutbox.Demo.Consumer/MassTransit.PostgresOutbox.Demo.Consumer.csproj" />
+        <Project Path="test/MassTransit.PostgresOutbox.Demo.Publisher/MassTransit.PostgresOutbox.Demo.Publisher.csproj" />
+        <Project Path="test/MassTransit.PostgresOutbox.Tests/MassTransit.PostgresOutbox.Tests.csproj" />
+        <Project Path="test/MassTransit.SQLiteOutbox.Demo.Consumer/MassTransit.SQLiteOutbox.Demo.Consumer.csproj" />
+        <Project Path="test/MassTransit.SQLiteOutbox.Demo.Publisher/MassTransit.SQLiteOutbox.Demo.Publisher.csproj" />
+        <Project Path="test\MassTransit.Demo.Shared\MassTransit.Demo.Shared.csproj" />
+    </Folder>
+</Solution>

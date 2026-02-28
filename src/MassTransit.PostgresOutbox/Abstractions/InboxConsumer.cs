@@ -26,12 +26,14 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
 
    public async Task Consume(ConsumeContext<TMessage> context)
    {
-      var messageId = context.Headers.Get<Guid>(Constants.OutboxMessageId) ?? context.MessageId;
+      var ct = context.CancellationToken;
+      var messageId = context.Headers.Get<Guid>(Constants.OutboxMessageIdHeaderName) ?? context.MessageId;
       var dbContext = _sp.GetRequiredService<TDbContext>();
       var logger = _sp.GetRequiredService<ILogger<InboxConsumer<TMessage, TDbContext>>>();
 
-      var exists =
-         await dbContext.InboxMessages.AnyAsync(x => x.MessageId == messageId && x.ConsumerId == _consumerId);
+      var exists = await dbContext.InboxMessages
+                                  .AnyAsync(x => x.MessageId == messageId && x.ConsumerId == _consumerId, ct)
+                                  .ConfigureAwait(false);
 
       if (!exists)
       {
@@ -43,49 +45,60 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
             ConsumerId = _consumerId
          });
 
-         await dbContext.SaveChangesAsync();
+         await dbContext.SaveChangesAsync(ct)
+                        .ConfigureAwait(false);
       }
 
-      await using var transactionScope =
-         await dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+      await using var transactionScope = await dbContext.Database
+                                                        .BeginTransactionAsync(IsolationLevel.ReadCommitted, ct)
+                                                        .ConfigureAwait(false);
 
       var inboxMessage = await dbContext.InboxMessages
                                         .Where(x => x.MessageId == messageId)
                                         .Where(x => x.ConsumerId == _consumerId)
                                         .Where(x => x.State == MessageState.New)
                                         .ForUpdate(LockBehavior.SkipLocked)
-                                        .FirstOrDefaultAsync();
-      if (inboxMessage == null)
+                                        .FirstOrDefaultAsync(ct)
+                                        .ConfigureAwait(false);
+      if (inboxMessage is null)
       {
          return;
       }
 
       try
       {
-         await Consume(context.Message, transactionScope);
+         await Consume(context.Message, transactionScope)
+            .ConfigureAwait(false);
 
          inboxMessage.State = MessageState.Done;
          inboxMessage.UpdatedAt = DateTime.UtcNow;
 
-         await dbContext.SaveChangesAsync();
-         await transactionScope.CommitAsync();
+         await dbContext.SaveChangesAsync(ct)
+                        .ConfigureAwait(false);
+         await transactionScope.CommitAsync(ct)
+                               .ConfigureAwait(false);
       }
       catch (Exception ex)
       {
-         logger.LogError(ex,
-            "Exception thrown while consuming message {messageId} by {consumerId}",
-            messageId,
-            _consumerId);
+         InboxLog.ConsumeError(logger, messageId, _consumerId, ex);
 
-         await transactionScope.RollbackAsync();
+         await transactionScope.RollbackAsync(CancellationToken.None)
+                               .ConfigureAwait(false);
 
          await dbContext.InboxMessages
                         .Where(x => x.MessageId == messageId && x.ConsumerId == _consumerId)
-                        .ExecuteUpdateAsync(x => x.SetProperty(x => x.UpdatedAt, x => DateTime.UtcNow));
+                        .ExecuteUpdateAsync(x => x.SetProperty(p => p.UpdatedAt, DateTime.UtcNow), ct)
+                        .ConfigureAwait(false);
 
          throw;
       }
    }
 
    protected abstract Task Consume(TMessage message, IDbContextTransaction transactionScope);
+}
+
+internal static partial class InboxLog
+{
+   [LoggerMessage(Level = LogLevel.Error, Message = "Failed to consume inbox message {MessageId} by {ConsumerId}")]
+   public static partial void ConsumeError(ILogger logger, Guid? messageId, string consumerId, Exception ex);
 }

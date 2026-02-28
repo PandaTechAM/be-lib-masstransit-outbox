@@ -2,5 +2,5 @@
 
 public class Constants
 {
-   public const string OutboxMessageId = "OutboxMessageId";
+   public const string OutboxMessageIdHeaderName = "OutboxMessageId";
 }

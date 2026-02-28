@@ -23,16 +23,18 @@ internal class OutboxMessagePublisherService<TDbContext>(
 
    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
    {
-      while (await _timer.WaitForNextTickAsync(stoppingToken))
+      while (await _timer.WaitForNextTickAsync(stoppingToken)
+                         .ConfigureAwait(false))
       {
-         logger.LogDebug($"{nameof(OutboxMessagePublisherService<TDbContext>)} started iteration");
+         OutboxPublisherLog.IterationStarted(logger);
 
          using var scope = serviceScopeFactory.CreateScope();
          await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
          var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
-         await using var transactionScope =
-            await dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted,
-               stoppingToken);
+         await using var transactionScope = await dbContext.Database
+                                                           .BeginTransactionAsync(IsolationLevel.ReadCommitted,
+                                                              stoppingToken)
+                                                           .ConfigureAwait(false);
 
          try
          {
@@ -41,7 +43,8 @@ internal class OutboxMessagePublisherService<TDbContext>(
                                           .OrderBy(x => x.CreatedAt)
                                           .ForUpdate(LockBehavior.SkipLocked)
                                           .Take(_batchCount)
-                                          .ToListAsync(stoppingToken);
+                                          .ToListAsync(stoppingToken)
+                                          .ConfigureAwait(false);
 
             if (messages.Count == 0)
             {
@@ -56,18 +59,25 @@ internal class OutboxMessagePublisherService<TDbContext>(
                {
                   var type = Type.GetType(message.Type);
 
-                  var messageObject = JsonSerializer.Deserialize(message.Payload, type!);
+                  if (type is null)
+                  {
+                     OutboxPublisherLog.TypeResolutionFailed(logger, message.Id, message.Type);
+                     continue;
+                  }
+
+                  var messageObject = JsonSerializer.Deserialize(message.Payload, type);
 
                   await publishEndpoint.Publish(messageObject!,
-                     type!,
-                     x => x.Headers.Set(Constants.OutboxMessageId, message.Id),
-                     stoppingToken);
+                                          type,
+                                          x => x.Headers.Set(Constants.OutboxMessageIdHeaderName, message.Id),
+                                          stoppingToken)
+                                       .ConfigureAwait(false);
 
                   publishedMessageIds.Add(message.Id);
                }
                catch (Exception ex)
                {
-                  logger.LogError(ex, ex.Message);
+                  OutboxPublisherLog.PublishFailed(logger, message.Id, ex);
                }
             }
 
@@ -82,18 +92,39 @@ internal class OutboxMessagePublisherService<TDbContext>(
                            .Where(b => publishedMessageIds.Contains(b.Id))
                            .ExecuteUpdateAsync(x => x.SetProperty(m => m.State, MessageState.Done)
                                                      .SetProperty(m => m.UpdatedAt, utcNow),
-                              stoppingToken);
+                              stoppingToken)
+                           .ConfigureAwait(false);
 
-            await dbContext.SaveChangesAsync(stoppingToken);
-            await transactionScope.CommitAsync(stoppingToken);
+            await transactionScope.CommitAsync(stoppingToken)
+                                  .ConfigureAwait(false);
+
+            OutboxPublisherLog.IterationCompleted(logger, publishedMessageIds.Count);
          }
          catch (Exception ex)
          {
-            logger.LogError(ex, ex.Message);
-            await transactionScope.RollbackAsync(stoppingToken);
+            OutboxPublisherLog.IterationFailed(logger, ex);
+            await transactionScope.RollbackAsync(CancellationToken.None)
+                                  .ConfigureAwait(false);
          }
-
-         logger.LogDebug($"{nameof(OutboxMessagePublisherService<TDbContext>)} finished iteration");
       }
    }
+}
+
+internal static partial class OutboxPublisherLog
+{
+   [LoggerMessage(Level = LogLevel.Debug, Message = "Outbox publisher started iteration")]
+   public static partial void IterationStarted(ILogger logger);
+
+   [LoggerMessage(Level = LogLevel.Debug, Message = "Outbox publisher completed: {PublishedCount} messages published")]
+   public static partial void IterationCompleted(ILogger logger, int publishedCount);
+
+   [LoggerMessage(Level = LogLevel.Error, Message = "Outbox publisher iteration failed")]
+   public static partial void IterationFailed(ILogger logger, Exception ex);
+
+   [LoggerMessage(Level = LogLevel.Error, Message = "Failed to publish outbox message {MessageId}")]
+   public static partial void PublishFailed(ILogger logger, Guid messageId, Exception ex);
+
+   [LoggerMessage(Level = LogLevel.Error,
+      Message = "Cannot resolve type '{TypeName}' for outbox message {MessageId}")]
+   public static partial void TypeResolutionFailed(ILogger logger, Guid messageId, string typeName);
 }
