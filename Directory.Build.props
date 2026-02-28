@@ -9,8 +9,8 @@
         <Authors>Pandatech</Authors>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <RepositoryType>git</RepositoryType>
-        <RepositoryUrl>https://github.com/PandaTechAM/be-lib-pandatech-masstransit-outbox</RepositoryUrl>
-        <PackageProjectUrl>https://github.com/PandaTechAM/be-lib-pandatech-masstransit-outbox</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/PandaTechAM/be-lib-masstransit-outbox</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/PandaTechAM/be-lib-masstransit-outbox</PackageProjectUrl>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
 
         <PackageIcon>pandatech.png</PackageIcon>
