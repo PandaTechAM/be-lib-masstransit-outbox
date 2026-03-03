@@ -10,7 +10,7 @@ public class OutboxMessage
    /// <summary>
    ///    Unique identifier for this outbox message.
    /// </summary>
-   public required Guid Id { get; set; }
+   public Guid Id { get; private set; } = Guid.CreateVersion7();
 
    /// <summary>
    ///    Current processing state of the message.

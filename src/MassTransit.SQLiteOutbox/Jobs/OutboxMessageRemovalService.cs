@@ -19,11 +19,8 @@ internal class OutboxMessageRemovalService<TDbContext>(
 
    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
    {
-      while (await _timer.WaitForNextTickAsync(stoppingToken)
-                         .ConfigureAwait(false))
+      while (await _timer.WaitForNextTickAsync(stoppingToken))
       {
-         OutboxRemovalLog.IterationStarted(logger);
-
          using var scope = serviceScopeFactory.CreateScope();
          await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
@@ -31,13 +28,10 @@ internal class OutboxMessageRemovalService<TDbContext>(
          {
             var daysBefore = DateTime.UtcNow.AddDays(-_beforeInDays);
 
-            var deleted = await dbContext.OutboxMessages
-                                         .Where(x => x.State == MessageState.Done)
-                                         .Where(x => x.UpdatedAt < daysBefore)
-                                         .ExecuteDeleteAsync(stoppingToken)
-                                         .ConfigureAwait(false);
-
-            OutboxRemovalLog.IterationCompleted(logger, deleted);
+            await dbContext.OutboxMessages
+                           .Where(x => x.State == MessageState.Done)
+                           .Where(x => x.UpdatedAt < daysBefore)
+                           .ExecuteDeleteAsync(stoppingToken);
          }
          catch (Exception ex)
          {
@@ -45,16 +39,16 @@ internal class OutboxMessageRemovalService<TDbContext>(
          }
       }
    }
+
+   public override void Dispose()
+   {
+      _timer.Dispose();
+      base.Dispose();
+   }
 }
 
 internal static partial class OutboxRemovalLog
 {
-   [LoggerMessage(Level = LogLevel.Debug, Message = "Outbox removal started iteration")]
-   public static partial void IterationStarted(ILogger logger);
-
-   [LoggerMessage(Level = LogLevel.Debug, Message = "Outbox removal completed: {DeletedCount} messages deleted")]
-   public static partial void IterationCompleted(ILogger logger, int deletedCount);
-
    [LoggerMessage(Level = LogLevel.Error, Message = "Outbox removal iteration failed")]
    public static partial void IterationFailed(ILogger logger, Exception ex);
 }

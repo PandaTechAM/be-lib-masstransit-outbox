@@ -32,34 +32,37 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
       var logger = _sp.GetRequiredService<ILogger<InboxConsumer<TMessage, TDbContext>>>();
 
       var exists = await dbContext.InboxMessages
-                                  .AnyAsync(x => x.MessageId == messageId && x.ConsumerId == _consumerId, ct)
-                                  .ConfigureAwait(false);
+                                  .AnyAsync(x => x.MessageId == messageId && x.ConsumerId == _consumerId, ct);
 
       if (!exists)
       {
-         dbContext.InboxMessages.Add(new InboxMessage
+         try
          {
-            MessageId = messageId!.Value,
-            CreatedAt = DateTime.UtcNow,
-            State = MessageState.New,
-            ConsumerId = _consumerId
-         });
-
-         await dbContext.SaveChangesAsync(ct)
-                        .ConfigureAwait(false);
+            dbContext.InboxMessages.Add(new InboxMessage
+            {
+               MessageId = messageId!.Value,
+               CreatedAt = DateTime.UtcNow,
+               State = MessageState.New,
+               ConsumerId = _consumerId
+            });
+            await dbContext.SaveChangesAsync(ct);
+         }
+         catch (DbUpdateException)
+         {
+            dbContext.ChangeTracker.Clear();
+         }
       }
 
+
       await using var transactionScope = await dbContext.Database
-                                                        .BeginTransactionAsync(IsolationLevel.ReadCommitted, ct)
-                                                        .ConfigureAwait(false);
+                                                        .BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
 
       var inboxMessage = await dbContext.InboxMessages
                                         .Where(x => x.MessageId == messageId)
                                         .Where(x => x.ConsumerId == _consumerId)
                                         .Where(x => x.State == MessageState.New)
                                         .ForUpdate(LockBehavior.SkipLocked)
-                                        .FirstOrDefaultAsync(ct)
-                                        .ConfigureAwait(false);
+                                        .FirstOrDefaultAsync(ct);
       if (inboxMessage is null)
       {
          return;
@@ -67,34 +70,40 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
 
       try
       {
-         await Consume(context.Message, transactionScope)
-            .ConfigureAwait(false);
+         await ConsumeAsync(context.Message, transactionScope, ct);
 
          inboxMessage.State = MessageState.Done;
          inboxMessage.UpdatedAt = DateTime.UtcNow;
 
-         await dbContext.SaveChangesAsync(ct)
-                        .ConfigureAwait(false);
-         await transactionScope.CommitAsync(ct)
-                               .ConfigureAwait(false);
+         await dbContext.SaveChangesAsync(ct);
+         await transactionScope.CommitAsync(ct);
       }
       catch (Exception ex)
       {
          InboxLog.ConsumeError(logger, messageId, _consumerId, ex);
 
-         await transactionScope.RollbackAsync(CancellationToken.None)
-                               .ConfigureAwait(false);
+         await transactionScope.RollbackAsync(CancellationToken.None);
 
          await dbContext.InboxMessages
                         .Where(x => x.MessageId == messageId && x.ConsumerId == _consumerId)
-                        .ExecuteUpdateAsync(x => x.SetProperty(p => p.UpdatedAt, DateTime.UtcNow), ct)
-                        .ConfigureAwait(false);
+                        .ExecuteUpdateAsync(x => x.SetProperty(p => p.UpdatedAt, DateTime.UtcNow), ct);
 
          throw;
       }
    }
 
-   protected abstract Task Consume(TMessage message, IDbContextTransaction transactionScope);
+   /// <summary>
+   ///    Processes the incoming message within a managed transaction. The base class
+   ///    handles idempotency, locking, commit, and rollback — implementations should
+   ///    only contain domain logic.
+   /// </summary>
+   /// <param name="message">The deserialized message payload.</param>
+   /// <param name="transactionScope">
+   ///    The active database transaction. Enlist additional operations in this
+   ///    transaction if they must be atomic with the inbox state change.
+   /// </param>
+   /// <param name="ct">Cancellation token propagated from the MassTransit consume pipeline.</param>
+   protected abstract Task ConsumeAsync(TMessage message, IDbContextTransaction transactionScope, CancellationToken ct);
 }
 
 internal static partial class InboxLog

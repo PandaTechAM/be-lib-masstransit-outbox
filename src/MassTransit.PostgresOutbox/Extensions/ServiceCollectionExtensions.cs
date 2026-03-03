@@ -8,8 +8,14 @@ namespace MassTransit.PostgresOutbox.Extensions;
 public static class ServiceCollectionExtensions
 {
    /// <summary>
-   ///    Registers outbox publisher, outbox cleanup, and inbox cleanup background services.
+   ///    Registers outbox publisher, outbox cleanup, and inbox cleanup as hosted background services
+   ///    for the specified <typeparamref name="TDbContext" />.
    /// </summary>
+   /// <typeparam name="TDbContext">
+   ///    A <see cref="DbContext" /> implementing both <see cref="IOutboxDbContext" /> and <see cref="IInboxDbContext" />.
+   /// </typeparam>
+   /// <param name="services"></param>
+   /// <param name="settings">Optional settings override. Uses defaults when <c>null</c>.</param>
    public static IServiceCollection AddOutboxInboxServices<TDbContext>(this IServiceCollection services,
       Settings? settings = null)
       where TDbContext : DbContext, IOutboxDbContext, IInboxDbContext
@@ -21,7 +27,7 @@ public static class ServiceCollectionExtensions
    }
 
    /// <summary>
-   ///    Registers only the outbox publisher background service.
+   ///    Registers only the outbox publisher background service for the specified <typeparamref name="TDbContext" />.
    /// </summary>
    public static IServiceCollection AddOutboxPublisherJob<TDbContext>(this IServiceCollection services,
       Settings? settings = null)
@@ -33,7 +39,7 @@ public static class ServiceCollectionExtensions
    }
 
    /// <summary>
-   ///    Registers only the outbox cleanup background service.
+   ///    Registers only the outbox message cleanup background service.
    /// </summary>
    public static IServiceCollection AddOutboxRemovalJob<TDbContext>(this IServiceCollection services,
       Settings? settings = null)
@@ -45,7 +51,7 @@ public static class ServiceCollectionExtensions
    }
 
    /// <summary>
-   ///    Registers only the inbox cleanup background service.
+   ///    Registers only the inbox message cleanup background service.
    /// </summary>
    public static IServiceCollection AddInboxRemovalJob<TDbContext>(this IServiceCollection services,
       Settings? settings = null)

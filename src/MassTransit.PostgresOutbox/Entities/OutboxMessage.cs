@@ -4,7 +4,7 @@ namespace MassTransit.PostgresOutbox.Entities;
 
 public class OutboxMessage
 {
-   public required Guid Id { get; set; }
+   public Guid Id { get; private set; } = Guid.CreateVersion7();
    public MessageState State { get; set; } = MessageState.New;
    public required string Payload { get; set; }
    public required string Type { get; set; }

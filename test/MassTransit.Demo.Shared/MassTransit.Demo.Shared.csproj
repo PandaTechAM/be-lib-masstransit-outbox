@@ -8,8 +8,8 @@
     <ItemGroup>
         <PackageReference Include="MassTransit" Version="[8.5.7]"/>
         <PackageReference Include="MassTransit.RabbitMQ" Version="[8.5.7]"/>
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3"/>
         <ProjectReference Include="..\..\src\MassTransit.PostgresOutbox\MassTransit.PostgresOutbox.csproj"/>
         <ProjectReference Include="..\..\src\MassTransit.SQLiteOutbox\MassTransit.SQLiteOutbox.csproj"/>
     </ItemGroup>

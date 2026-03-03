@@ -9,7 +9,7 @@ namespace MassTransit.SQLiteOutbox.Abstractions;
 
 /// <summary>
 ///    Base class for idempotent message consumption using the inbox pattern with SQLite.
-///    Inherit from this class and implement <see cref="Consume(TMessage, IDbContextTransaction)" />
+///    Inherit from this class and implement <see cref="ConsumeAsync(TMessage, IDbContextTransaction)" />
 ///    to process messages exactly once. Concurrency is controlled via a lease-based strategy.
 /// </summary>
 /// <typeparam name="TMessage">The message type to consume.</typeparam>
@@ -42,21 +42,25 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
       var settings = _sp.GetRequiredService<Settings>();
 
       var exists = await dbContext.InboxMessages
-                                  .AnyAsync(x => x.MessageId == messageId && x.ConsumerId == _consumerId, ct)
-                                  .ConfigureAwait(false);
+                                  .AnyAsync(x => x.MessageId == messageId && x.ConsumerId == _consumerId, ct);
 
       if (!exists)
       {
-         dbContext.InboxMessages.Add(new InboxMessage
+         try
          {
-            MessageId = messageId!.Value,
-            CreatedAt = DateTime.UtcNow,
-            State = MessageState.New,
-            ConsumerId = _consumerId
-         });
-
-         await dbContext.SaveChangesAsync(ct)
-                        .ConfigureAwait(false);
+            dbContext.InboxMessages.Add(new InboxMessage
+            {
+               MessageId = messageId!.Value,
+               CreatedAt = DateTime.UtcNow,
+               State = MessageState.New,
+               ConsumerId = _consumerId
+            });
+            await dbContext.SaveChangesAsync(ct);
+         }
+         catch (DbUpdateException)
+         {
+            dbContext.ChangeTracker.Clear();
+         }
       }
 
       // Atomically try to lease the message (replaces FOR UPDATE SKIP LOCKED)
@@ -70,8 +74,7 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
                                   .Where(x => x.LeasedUntil == null || x.LeasedUntil < utcNow)
                                   .ExecuteUpdateAsync(
                                      x => x.SetProperty(m => m.LeasedUntil, leaseExpiry),
-                                     ct)
-                                  .ConfigureAwait(false);
+                                     ct);
 
       if (leased == 0)
       {
@@ -79,31 +82,26 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
       }
 
       await using var transactionScope = await dbContext.Database
-                                                        .BeginTransactionAsync(ct)
-                                                        .ConfigureAwait(false);
+                                                        .BeginTransactionAsync(ct);
 
       try
       {
-         await Consume(context.Message, transactionScope)
-            .ConfigureAwait(false);
+         await ConsumeAsync(context.Message, transactionScope, ct);
 
          await dbContext.InboxMessages
                         .Where(x => x.MessageId == messageId && x.ConsumerId == _consumerId)
                         .ExecuteUpdateAsync(
                            x => x.SetProperty(m => m.State, MessageState.Done)
                                  .SetProperty(m => m.UpdatedAt, DateTime.UtcNow),
-                           ct)
-                        .ConfigureAwait(false);
+                           ct);
 
-         await transactionScope.CommitAsync(ct)
-                               .ConfigureAwait(false);
+         await transactionScope.CommitAsync(ct);
       }
       catch (Exception ex)
       {
          InboxLog.ConsumeError(logger, messageId, _consumerId, ex);
 
-         await transactionScope.RollbackAsync(CancellationToken.None)
-                               .ConfigureAwait(false);
+         await transactionScope.RollbackAsync(CancellationToken.None);
 
          // Release the lease so the message can be retried immediately
          await dbContext.InboxMessages
@@ -111,23 +109,24 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
                         .ExecuteUpdateAsync(
                            x => x.SetProperty(m => m.LeasedUntil, (DateTime?)null)
                                  .SetProperty(m => m.UpdatedAt, DateTime.UtcNow),
-                           CancellationToken.None)
-                        .ConfigureAwait(false);
+                           CancellationToken.None);
 
          throw;
       }
    }
 
    /// <summary>
-   ///    Implement this method to process the incoming message. The provided transaction
-   ///    is managed by the base class — commit and rollback are handled automatically.
+   ///    Processes the incoming message within a managed transaction. The base class
+   ///    handles idempotency, locking, commit, and rollback — implementations should
+   ///    only contain domain logic.
    /// </summary>
    /// <param name="message">The deserialized message payload.</param>
    /// <param name="transactionScope">
-   ///    The active database transaction. Use it if you need to enlist additional operations
-   ///    in the same atomic unit of work.
+   ///    The active database transaction. Enlist additional operations in this
+   ///    transaction if they must be atomic with the inbox state change.
    /// </param>
-   protected abstract Task Consume(TMessage message, IDbContextTransaction transactionScope);
+   /// <param name="ct">Cancellation token propagated from the MassTransit consume pipeline.</param>
+   protected abstract Task ConsumeAsync(TMessage message, IDbContextTransaction transactionScope, CancellationToken ct);
 }
 
 internal static partial class InboxLog

@@ -49,7 +49,9 @@ public static class ModelBuilderExtensions
    }
 
    /// <summary>
-   ///    Configures both Inbox and Outbox entities. Call this in your DbContext.OnModelCreating.
+   ///    Configures both inbox and outbox entity mappings. Call this in
+   ///    <see cref="DbContext.OnModelCreating" /> for any context implementing
+   ///    <see cref="IOutboxDbContext" /> and/or <see cref="IInboxDbContext" />.
    /// </summary>
    public static ModelBuilder ConfigureInboxOutboxEntities(this ModelBuilder modelBuilder)
    {

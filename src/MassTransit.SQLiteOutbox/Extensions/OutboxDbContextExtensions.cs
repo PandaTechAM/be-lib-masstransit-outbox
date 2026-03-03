@@ -8,14 +8,17 @@ namespace MassTransit.SQLiteOutbox.Extensions;
 public static class OutboxDbContextExtensions
 {
    /// <summary>
-   ///    Adds a message to the outbox. Call SaveChanges/SaveChangesAsync to persist.
+   ///    Adds a message to the outbox, serialized as JSON. The message is persisted
+   ///    when <c>SaveChangesAsync</c> is called on the owning <see cref="DbContext" />.
    /// </summary>
-   /// <returns>The generated outbox message ID.</returns>
+   /// <typeparam name="T">The message type. Must be serializable by <see cref="System.Text.Json" />.</typeparam>
+   /// <param name="dbContext">The DbContext implementing <see cref="IOutboxDbContext" />.</param>
+   /// <param name="message">The message to enqueue.</param>
+   /// <returns>The generated outbox message ID, usable for correlation or diagnostics.</returns>
    public static Guid AddToOutbox<T>(this IOutboxDbContext dbContext, T message)
    {
       var entity = new OutboxMessage
       {
-         Id = Guid.NewGuid(),
          CreatedAt = DateTime.UtcNow,
          State = MessageState.New,
          UpdatedAt = null,
@@ -29,9 +32,13 @@ public static class OutboxDbContextExtensions
    }
 
    /// <summary>
-   ///    Adds multiple messages of the same type to the outbox. Call SaveChanges/SaveChangesAsync to persist.
+   ///    Adds multiple messages of the same type to the outbox in a single batch.
+   ///    All messages share the same <c>CreatedAt</c> timestamp.
    /// </summary>
-   /// <returns>The generated outbox message IDs.</returns>
+   /// <typeparam name="T">The message type. Must be serializable by <see cref="System.Text.Json" />.</typeparam>
+   /// <param name="dbContext">The DbContext implementing <see cref="IOutboxDbContext" />.</param>
+   /// <param name="messages">The messages to enqueue.</param>
+   /// <returns>The generated outbox message IDs in the same order as <paramref name="messages" />.</returns>
    public static IReadOnlyList<Guid> AddToOutboxRange<T>(this IOutboxDbContext dbContext, params T[] messages)
    {
       var utcNow = DateTime.UtcNow;
@@ -39,19 +46,17 @@ public static class OutboxDbContextExtensions
 
       var entities = messages.Select(message => new OutboxMessage
                              {
-                                Id = Guid.NewGuid(),
                                 CreatedAt = utcNow,
                                 State = MessageState.New,
                                 UpdatedAt = null,
                                 Payload = JsonSerializer.Serialize(message),
                                 Type = typeName
                              })
-                             .ToList();
+                             .ToArray();
 
       dbContext.OutboxMessages.AddRange(entities);
 
-      return entities.Select(x => x.Id)
-                     .ToArray();
+      return Array.ConvertAll(entities, e => e.Id);
    }
 
    /// <summary>
