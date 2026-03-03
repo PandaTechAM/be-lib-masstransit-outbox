@@ -20,7 +20,7 @@ public static class ModelBuilderExtensions
       {
          x.State,
          x.LeasedUntil,
-         x.CreatedAt
+         x.Id
       });
 
       return modelBuilder;
