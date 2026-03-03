@@ -21,8 +21,6 @@ internal class OutboxMessageRemovalService<TDbContext>(
    {
       while (await _timer.WaitForNextTickAsync(stoppingToken))
       {
-         logger.LogDebug($"{nameof(OutboxMessageRemovalService<>)} started iteration");
-
          using var scope = serviceScopeFactory.CreateScope();
          await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
@@ -37,10 +35,20 @@ internal class OutboxMessageRemovalService<TDbContext>(
          }
          catch (Exception ex)
          {
-            logger.LogError(ex, ex.Message);
+            OutboxRemovalLog.IterationFailed(logger, ex);
          }
-
-         logger.LogDebug($"{nameof(OutboxMessageRemovalService<TDbContext>)} finished iteration");
       }
    }
+
+   public override void Dispose()
+   {
+      _timer.Dispose();
+      base.Dispose();
+   }
+}
+
+internal static partial class OutboxRemovalLog
+{
+   [LoggerMessage(Level = LogLevel.Error, Message = "Outbox removal iteration failed")]
+   public static partial void IterationFailed(ILogger logger, Exception ex);
 }

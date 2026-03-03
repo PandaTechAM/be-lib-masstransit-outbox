@@ -25,20 +25,18 @@ internal class OutboxMessagePublisherService<TDbContext>(
    {
       while (await _timer.WaitForNextTickAsync(stoppingToken))
       {
-         logger.LogDebug($"{nameof(OutboxMessagePublisherService<TDbContext>)} started iteration");
-
          using var scope = serviceScopeFactory.CreateScope();
          await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
          var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
-         await using var transactionScope =
-            await dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted,
-               stoppingToken);
+         await using var transactionScope = await dbContext.Database
+                                                           .BeginTransactionAsync(IsolationLevel.ReadCommitted,
+                                                              stoppingToken);
 
          try
          {
             var messages = await dbContext.OutboxMessages
                                           .Where(x => x.State == MessageState.New)
-                                          .OrderBy(x => x.CreatedAt)
+                                          .OrderBy(x => x.Id)
                                           .ForUpdate(LockBehavior.SkipLocked)
                                           .Take(_batchCount)
                                           .ToListAsync(stoppingToken);
@@ -56,18 +54,24 @@ internal class OutboxMessagePublisherService<TDbContext>(
                {
                   var type = Type.GetType(message.Type);
 
-                  var messageObject = JsonSerializer.Deserialize(message.Payload, type!);
+                  if (type is null)
+                  {
+                     OutboxPublisherLog.TypeResolutionFailed(logger, message.Id, message.Type);
+                     continue;
+                  }
+
+                  var messageObject = JsonSerializer.Deserialize(message.Payload, type);
 
                   await publishEndpoint.Publish(messageObject!,
-                     type!,
-                     x => x.Headers.Set(Constants.OutboxMessageId, message.Id),
+                     type,
+                     x => x.Headers.Set(Constants.OutboxMessageIdHeaderName, message.Id),
                      stoppingToken);
 
                   publishedMessageIds.Add(message.Id);
                }
                catch (Exception ex)
                {
-                  logger.LogError(ex, ex.Message);
+                  OutboxPublisherLog.PublishFailed(logger, message.Id, ex);
                }
             }
 
@@ -84,16 +88,31 @@ internal class OutboxMessagePublisherService<TDbContext>(
                                                      .SetProperty(m => m.UpdatedAt, utcNow),
                               stoppingToken);
 
-            await dbContext.SaveChangesAsync(stoppingToken);
             await transactionScope.CommitAsync(stoppingToken);
          }
          catch (Exception ex)
          {
-            logger.LogError(ex, ex.Message);
-            await transactionScope.RollbackAsync(stoppingToken);
+            OutboxPublisherLog.IterationFailed(logger, ex);
+            await transactionScope.RollbackAsync(CancellationToken.None);
          }
-
-         logger.LogDebug($"{nameof(OutboxMessagePublisherService<TDbContext>)} finished iteration");
       }
    }
+
+   public override void Dispose()
+   {
+      _timer.Dispose();
+      base.Dispose();
+   }
+}
+
+internal static partial class OutboxPublisherLog
+{
+   [LoggerMessage(Level = LogLevel.Error, Message = "Outbox publisher iteration failed")]
+   public static partial void IterationFailed(ILogger logger, Exception ex);
+
+   [LoggerMessage(Level = LogLevel.Error, Message = "Failed to publish outbox message {MessageId}")]
+   public static partial void PublishFailed(ILogger logger, Guid messageId, Exception ex);
+
+   [LoggerMessage(Level = LogLevel.Error, Message = "Cannot resolve type '{TypeName}' for outbox message {MessageId}")]
+   public static partial void TypeResolutionFailed(ILogger logger, Guid messageId, string typeName);
 }
