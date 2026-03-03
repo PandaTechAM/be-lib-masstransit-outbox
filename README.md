@@ -10,7 +10,7 @@ architectures.
 | Package                                | Provider   | Concurrency strategy        |
 |----------------------------------------|------------|-----------------------------|
 | `Pandatech.MassTransit.PostgresOutbox` | PostgreSQL | `FOR UPDATE SKIP LOCKED`    |
-| `Pandatech.MassTransit.SqliteOutbox`   | SQLite     | Lease-based (`LeasedUntil`) |
+| `Pandatech.MassTransit.SQLiteOutbox`   | SQLite     | Lease-based (`LeasedUntil`) |
 
 Both packages are **wire-compatible** — a service using PostgreSQL for its outbox can publish to a service using SQLite
 for its inbox, and vice versa.
