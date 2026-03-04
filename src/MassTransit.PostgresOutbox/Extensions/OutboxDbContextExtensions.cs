@@ -40,7 +40,7 @@ public static class OutboxDbContextExtensions
    /// <param name="dbContext">The DbContext implementing <see cref="IOutboxDbContext" />.</param>
    /// <param name="messages">The messages to enqueue.</param>
    /// <returns>The generated outbox message IDs in the same order as <paramref name="messages" />.</returns>
-   public static IReadOnlyList<Guid> AddToOutboxRange<T>(this IOutboxDbContext dbContext, params T[] messages)
+   public static IReadOnlyList<Guid> AddToOutboxRange<T>(this IOutboxDbContext dbContext, IEnumerable<T> messages)
    {
       var utcNow = DateTime.UtcNow;
       var typeName = GetVersionAgnosticTypeName<T>();
@@ -59,6 +59,16 @@ public static class OutboxDbContextExtensions
 
       return Array.ConvertAll(entities, e => e.Id);
    }
+
+   /// <summary>
+   ///    Convenience overload that accepts individual messages as arguments.
+   /// </summary>
+   /// <typeparam name="T">The message type. Must be serializable by <see cref="System.Text.Json" />.</typeparam>
+   /// <param name="dbContext">The DbContext implementing <see cref="IOutboxDbContext" />.</param>
+   /// <param name="messages">The messages to enqueue.</param>
+   /// <returns>The generated outbox message IDs in the same order as <paramref name="messages" />.</returns>
+   public static IReadOnlyList<Guid> AddToOutboxRange<T>(this IOutboxDbContext dbContext, params T[] messages)
+      => AddToOutboxRange(dbContext, messages.AsEnumerable());
 
    /// <summary>
    ///    Returns "Namespace.TypeName, AssemblyName" without version/culture/token.
