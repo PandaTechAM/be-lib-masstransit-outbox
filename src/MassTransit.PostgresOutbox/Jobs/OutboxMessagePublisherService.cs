@@ -13,6 +13,7 @@ namespace MassTransit.PostgresOutbox.Jobs;
 
 internal class OutboxMessagePublisherService<TDbContext>(
    IServiceScopeFactory serviceScopeFactory,
+   IBus bus,
    ILogger<OutboxMessagePublisherService<TDbContext>> logger,
    Settings settings)
    : BackgroundService
@@ -27,7 +28,6 @@ internal class OutboxMessagePublisherService<TDbContext>(
       {
          using var scope = serviceScopeFactory.CreateScope();
          await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
-         var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
          await using var transactionScope = await dbContext.Database
                                                            .BeginTransactionAsync(IsolationLevel.ReadCommitted,
                                                               stoppingToken);
@@ -43,6 +43,7 @@ internal class OutboxMessagePublisherService<TDbContext>(
 
             if (messages.Count == 0)
             {
+               await transactionScope.RollbackAsync(stoppingToken);
                continue;
             }
 
@@ -62,7 +63,7 @@ internal class OutboxMessagePublisherService<TDbContext>(
 
                   var messageObject = JsonSerializer.Deserialize(message.Payload, type);
 
-                  await publishEndpoint.Publish(messageObject!,
+                  await bus.Publish(messageObject!,
                      type,
                      x => x.Headers.Set(Constants.OutboxMessageIdHeaderName, message.Id),
                      stoppingToken);
@@ -77,6 +78,7 @@ internal class OutboxMessagePublisherService<TDbContext>(
 
             if (publishedMessageIds.Count == 0)
             {
+               await transactionScope.RollbackAsync(stoppingToken);
                continue;
             }
 

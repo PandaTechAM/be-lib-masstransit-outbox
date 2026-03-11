@@ -10,6 +10,7 @@ namespace MassTransit.SQLiteOutbox.Jobs;
 
 internal class OutboxMessagePublisherService<TDbContext>(
    IServiceScopeFactory serviceScopeFactory,
+   IBus bus,
    ILogger<OutboxMessagePublisherService<TDbContext>> logger,
    Settings settings)
    : BackgroundService
@@ -25,7 +26,6 @@ internal class OutboxMessagePublisherService<TDbContext>(
       {
          using var scope = serviceScopeFactory.CreateScope();
          await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
-         var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
 
          try
          {
@@ -84,7 +84,7 @@ internal class OutboxMessagePublisherService<TDbContext>(
 
                   var messageObject = JsonSerializer.Deserialize(message.Payload, type);
 
-                  await publishEndpoint.Publish(messageObject!,
+                  await bus.Publish(messageObject!,
                      type,
                      x => x.Headers.Set(Constants.OutboxMessageIdHeaderName, message.Id),
                      stoppingToken);
