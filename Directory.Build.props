@@ -1,4 +1,4 @@
-<Project>
+﻿<Project>
     <PropertyGroup>
         <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
         <Nullable>enable</Nullable>
@@ -16,7 +16,7 @@
         <PackageIcon>pandatech.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
-        <Version>5.1.0</Version>
+        <Version>5.1.1</Version>
         <PackageReleaseNotes>Bug fix on AddRange() extension method</PackageReleaseNotes>
 
         <!-- Build quality -->
