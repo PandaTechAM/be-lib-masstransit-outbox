@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Text.Json;
 using EFCore.PostgresExtensions.Enums;
 using EFCore.PostgresExtensions.Extensions;
 using MassTransit.PostgresOutbox.Entities;
@@ -30,6 +31,7 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
       var messageId = context.Headers.Get<Guid>(Constants.OutboxMessageIdHeaderName) ?? context.MessageId;
       var dbContext = _sp.GetRequiredService<TDbContext>();
       var logger = _sp.GetRequiredService<ILogger<InboxConsumer<TMessage, TDbContext>>>();
+      var settings = _sp.GetRequiredService<Settings>();
 
       var exists = await dbContext.InboxMessages
                                   .AnyAsync(x => x.MessageId == messageId && x.ConsumerId == _consumerId, ct);
@@ -43,7 +45,10 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
                MessageId = messageId!.Value,
                CreatedAt = DateTime.UtcNow,
                State = MessageState.New,
-               ConsumerId = _consumerId
+               ConsumerId = _consumerId,
+               Payload = settings.InboxRetryEnabled ? JsonSerializer.Serialize(context.Message) : null,
+               Type = settings.InboxRetryEnabled ? GetVersionAgnosticTypeName() : null,
+               DestinationAddress = settings.InboxRetryEnabled ? context.ReceiveContext.InputAddress?.ToString() : null
             });
             await dbContext.SaveChangesAsync(ct);
          }
@@ -84,11 +89,42 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
 
          await transactionScope.RollbackAsync(CancellationToken.None);
 
+         if (!settings.InboxRetryEnabled)
+         {
+            throw;
+         }
+
+         var newRetryCount = inboxMessage.RetryCount + 1;
+
+          var isFailed = newRetryCount > settings.InboxRetryIntervals.Length;
+
+          var nextRetryAt = isFailed ? (DateTime?)null : RetryDelayCalculator.ComputeNextRetryAt(inboxMessage.RetryCount, settings);
+
+         var newState = isFailed ? MessageState.Failed : MessageState.New;
+
+         var errorMessage = ex.ToString();
+
+         if (errorMessage.Length > 4000)
+         {
+            errorMessage = errorMessage[..4000];
+         }
+
          await dbContext.InboxMessages
                         .Where(x => x.MessageId == messageId && x.ConsumerId == _consumerId)
-                        .ExecuteUpdateAsync(x => x.SetProperty(p => p.UpdatedAt, DateTime.UtcNow), ct);
+                        .ExecuteUpdateAsync(x => x.SetProperty(p => p.UpdatedAt, DateTime.UtcNow)
+                                                  .SetProperty(p => p.RetryCount, newRetryCount)
+                                                  .SetProperty(p => p.State, newState)
+                                                  .SetProperty(p => p.NextRetryAt, nextRetryAt)
+                                                  .SetProperty(p => p.LastError, errorMessage), ct);
 
-         throw;
+         if (isFailed)
+         {
+            InboxLog.RetryExhausted(logger, messageId, _consumerId, newRetryCount);
+         }
+         else
+         {
+            InboxLog.RetryScheduled(logger, messageId, _consumerId, newRetryCount, nextRetryAt!.Value);
+         }
       }
    }
 
@@ -104,10 +140,25 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
    /// </param>
    /// <param name="ct">Cancellation token propagated from the MassTransit consume pipeline.</param>
    protected abstract Task ConsumeAsync(TMessage message, IDbContextTransaction transactionScope, CancellationToken ct);
+
+   private static string GetVersionAgnosticTypeName()
+   {
+      var type = typeof(TMessage);
+      return $"{type.FullName}, {type.Assembly.GetName().Name}";
+   }
 }
 
 internal static partial class InboxLog
 {
    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to consume inbox message {MessageId} by {ConsumerId}")]
    public static partial void ConsumeError(ILogger logger, Guid? messageId, string consumerId, Exception ex);
+
+   [LoggerMessage(Level = LogLevel.Warning,
+      Message = "Inbox message {MessageId} for {ConsumerId} scheduled for retry {RetryCount} at {NextRetryAt}")]
+   public static partial void RetryScheduled(ILogger logger, Guid? messageId, string consumerId, int retryCount,
+      DateTime nextRetryAt);
+
+   [LoggerMessage(Level = LogLevel.Error,
+      Message = "Inbox message {MessageId} for {ConsumerId} exhausted all {RetryCount} retry attempts")]
+   public static partial void RetryExhausted(ILogger logger, Guid? messageId, string consumerId, int retryCount);
 }

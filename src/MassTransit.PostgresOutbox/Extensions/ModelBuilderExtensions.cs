@@ -32,6 +32,8 @@ public static class ModelBuilderExtensions
          x.ConsumerId
       });
 
+      entity.HasIndex(x => new { x.State, x.RetryCount, x.NextRetryAt });
+
       return modelBuilder;
    }
 

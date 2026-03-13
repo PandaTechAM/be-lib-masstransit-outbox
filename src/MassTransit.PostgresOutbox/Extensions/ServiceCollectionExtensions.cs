@@ -8,8 +8,8 @@ namespace MassTransit.PostgresOutbox.Extensions;
 public static class ServiceCollectionExtensions
 {
    /// <summary>
-   ///    Registers outbox publisher, outbox cleanup, and inbox cleanup as hosted background services
-   ///    for the specified <typeparamref name="TDbContext" />.
+   ///    Registers outbox publisher, outbox cleanup, inbox cleanup, and inbox retry
+   ///    as hosted background services for the specified <typeparamref name="TDbContext" />.
    /// </summary>
    /// <typeparam name="TDbContext">
    ///    A <see cref="DbContext" /> implementing both <see cref="IOutboxDbContext" /> and <see cref="IInboxDbContext" />.
@@ -20,10 +20,19 @@ public static class ServiceCollectionExtensions
       Settings? settings = null)
       where TDbContext : DbContext, IOutboxDbContext, IInboxDbContext
    {
-      return services.AddSettings(settings)
-                     .AddHostedService<OutboxMessagePublisherService<TDbContext>>()
-                     .AddHostedService<OutboxMessageRemovalService<TDbContext>>()
-                     .AddHostedService<InboxMessageRemovalService<TDbContext>>();
+      settings ??= new Settings();
+
+      services.AddSettings(settings)
+              .AddHostedService<OutboxMessagePublisherService<TDbContext>>()
+              .AddHostedService<OutboxMessageRemovalService<TDbContext>>()
+              .AddHostedService<InboxMessageRemovalService<TDbContext>>();
+
+      if (settings.InboxRetryEnabled)
+      {
+         services.AddHostedService<InboxMessageRetryService<TDbContext>>();
+      }
+
+      return services;
    }
 
    /// <summary>
@@ -59,6 +68,24 @@ public static class ServiceCollectionExtensions
    {
       services.AddSettings(settings);
       services.AddHostedService<InboxMessageRemovalService<TDbContext>>();
+      return services;
+   }
+
+   /// <summary>
+   ///    Registers only the inbox message retry background service.
+   /// </summary>
+   public static IServiceCollection AddInboxRetryJob<TDbContext>(this IServiceCollection services,
+      Settings? settings = null)
+      where TDbContext : DbContext, IInboxDbContext
+   {
+      settings ??= new Settings();
+      services.AddSettings(settings);
+
+      if (settings.InboxRetryEnabled)
+      {
+         services.AddHostedService<InboxMessageRetryService<TDbContext>>();
+      }
+
       return services;
    }
 
