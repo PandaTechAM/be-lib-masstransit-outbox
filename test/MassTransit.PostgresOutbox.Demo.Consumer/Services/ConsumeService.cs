@@ -12,6 +12,7 @@ public class ConsumeService(ConsumerContext dbContext, IServiceProvider sp)
       IDbContextTransaction dbContextTransaction,
       CancellationToken ct)
    {
+      throw new Exception();
       var original = ComplexObjectEvent.Init();
       var match = message.Equals(original);
       Console.WriteLine($"Match: {match}");
