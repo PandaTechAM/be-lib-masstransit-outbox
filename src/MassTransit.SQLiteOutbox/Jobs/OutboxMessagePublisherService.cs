@@ -24,11 +24,11 @@ internal class OutboxMessagePublisherService<TDbContext>(
    {
       while (await _timer.WaitForNextTickAsync(stoppingToken))
       {
-         using var scope = serviceScopeFactory.CreateScope();
-         await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
-
          try
          {
+            using var scope = serviceScopeFactory.CreateScope();
+            await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
             var utcNow = DateTime.UtcNow;
             var leaseExpiry = utcNow.Add(_leaseDuration);
 

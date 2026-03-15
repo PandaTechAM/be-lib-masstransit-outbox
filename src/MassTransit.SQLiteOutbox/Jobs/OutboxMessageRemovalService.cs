@@ -21,11 +21,11 @@ internal class OutboxMessageRemovalService<TDbContext>(
    {
       while (await _timer.WaitForNextTickAsync(stoppingToken))
       {
-         using var scope = serviceScopeFactory.CreateScope();
-         await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
-
          try
          {
+            using var scope = serviceScopeFactory.CreateScope();
+            await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
             var daysBefore = DateTime.UtcNow.AddDays(-_beforeInDays);
 
             await dbContext.OutboxMessages

@@ -23,11 +23,11 @@ internal class InboxMessageRetryService<TDbContext>(
    {
       while (await _timer.WaitForNextTickAsync(stoppingToken))
       {
-         using var scope = serviceScopeFactory.CreateScope();
-         await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
-
          try
          {
+            using var scope = serviceScopeFactory.CreateScope();
+            await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
             var utcNow = DateTime.UtcNow;
 
             var messages = await dbContext.InboxMessages
@@ -47,7 +47,7 @@ internal class InboxMessageRetryService<TDbContext>(
             {
                try
                {
-                  if (string.IsNullOrEmpty(message.Payload) || 
+                  if (string.IsNullOrEmpty(message.Payload) ||
                       string.IsNullOrEmpty(message.Type) ||
                       string.IsNullOrEmpty(message.DestinationAddress))
                   {
@@ -70,7 +70,7 @@ internal class InboxMessageRetryService<TDbContext>(
                   }
 
                   var messageObject = JsonSerializer.Deserialize(message.Payload, type);
-                 
+
                   var endpoint = await bus.GetSendEndpoint(new Uri(message.DestinationAddress));
 
                   await endpoint.Send(messageObject!, type,

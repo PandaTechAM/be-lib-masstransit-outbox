@@ -16,8 +16,8 @@
         <PackageIcon>pandatech.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
-        <Version>5.1.1</Version>
-        <PackageReleaseNotes>Bug fix on AddRange() extension method</PackageReleaseNotes>
+        <Version>5.2.0</Version>
+        <PackageReleaseNotes>Added Support for database backed retry mechanism (Currently PostgresSql only)</PackageReleaseNotes>
 
         <!-- Build quality -->
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>

@@ -26,76 +26,83 @@ internal class OutboxMessagePublisherService<TDbContext>(
    {
       while (await _timer.WaitForNextTickAsync(stoppingToken))
       {
-         using var scope = serviceScopeFactory.CreateScope();
-         await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
-         await using var transactionScope = await dbContext.Database
-                                                           .BeginTransactionAsync(IsolationLevel.ReadCommitted,
-                                                              stoppingToken);
-
          try
          {
-            var messages = await dbContext.OutboxMessages
-                                          .Where(x => x.State == MessageState.New)
-                                          .OrderBy(x => x.Id)
-                                          .ForUpdate(LockBehavior.SkipLocked)
-                                          .Take(_batchCount)
-                                          .ToListAsync(stoppingToken);
+            using var scope = serviceScopeFactory.CreateScope();
+            await using var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+            await using var transactionScope = await dbContext.Database
+                                                              .BeginTransactionAsync(IsolationLevel.ReadCommitted,
+                                                                 stoppingToken);
 
-            if (messages.Count == 0)
+            try
             {
-               await transactionScope.RollbackAsync(stoppingToken);
-               continue;
-            }
+               var messages = await dbContext.OutboxMessages
+                                             .Where(x => x.State == MessageState.New)
+                                             .OrderBy(x => x.Id)
+                                             .ForUpdate(LockBehavior.SkipLocked)
+                                             .Take(_batchCount)
+                                             .ToListAsync(stoppingToken);
 
-            var publishedMessageIds = new List<Guid>(messages.Count);
-
-            foreach (var message in messages)
-            {
-               try
+               if (messages.Count == 0)
                {
-                  var type = Type.GetType(message.Type);
+                  await transactionScope.RollbackAsync(stoppingToken);
+                  continue;
+               }
 
-                  if (type is null)
+               var publishedMessageIds = new List<Guid>(messages.Count);
+
+               foreach (var message in messages)
+               {
+                  try
                   {
-                     OutboxPublisherLog.TypeResolutionFailed(logger, message.Id, message.Type);
-                     continue;
+                     var type = Type.GetType(message.Type);
+
+                     if (type is null)
+                     {
+                        OutboxPublisherLog.TypeResolutionFailed(logger, message.Id, message.Type);
+                        continue;
+                     }
+
+                     var messageObject = JsonSerializer.Deserialize(message.Payload, type);
+
+                     await bus.Publish(messageObject!,
+                        type,
+                        x => x.Headers.Set(Constants.OutboxMessageIdHeaderName, message.Id),
+                        stoppingToken);
+
+                     publishedMessageIds.Add(message.Id);
                   }
-
-                  var messageObject = JsonSerializer.Deserialize(message.Payload, type);
-
-                  await bus.Publish(messageObject!,
-                     type,
-                     x => x.Headers.Set(Constants.OutboxMessageIdHeaderName, message.Id),
-                     stoppingToken);
-
-                  publishedMessageIds.Add(message.Id);
+                  catch (Exception ex)
+                  {
+                     OutboxPublisherLog.PublishFailed(logger, message.Id, ex);
+                  }
                }
-               catch (Exception ex)
+
+               if (publishedMessageIds.Count == 0)
                {
-                  OutboxPublisherLog.PublishFailed(logger, message.Id, ex);
+                  await transactionScope.RollbackAsync(stoppingToken);
+                  continue;
                }
-            }
 
-            if (publishedMessageIds.Count == 0)
+               var utcNow = DateTime.UtcNow;
+
+               await dbContext.OutboxMessages
+                              .Where(b => publishedMessageIds.Contains(b.Id))
+                              .ExecuteUpdateAsync(x => x.SetProperty(m => m.State, MessageState.Done)
+                                                        .SetProperty(m => m.UpdatedAt, utcNow),
+                                 stoppingToken);
+
+               await transactionScope.CommitAsync(stoppingToken);
+            }
+            catch (Exception ex)
             {
-               await transactionScope.RollbackAsync(stoppingToken);
-               continue;
+               OutboxPublisherLog.IterationFailed(logger, ex);
+               await transactionScope.RollbackAsync(CancellationToken.None);
             }
-
-            var utcNow = DateTime.UtcNow;
-
-            await dbContext.OutboxMessages
-                           .Where(b => publishedMessageIds.Contains(b.Id))
-                           .ExecuteUpdateAsync(x => x.SetProperty(m => m.State, MessageState.Done)
-                                                     .SetProperty(m => m.UpdatedAt, utcNow),
-                              stoppingToken);
-
-            await transactionScope.CommitAsync(stoppingToken);
          }
          catch (Exception ex)
          {
             OutboxPublisherLog.IterationFailed(logger, ex);
-            await transactionScope.RollbackAsync(CancellationToken.None);
          }
       }
    }
