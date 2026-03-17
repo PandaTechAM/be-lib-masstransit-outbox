@@ -1,7 +1,7 @@
-using MassTransit.PostgresOutbox;
-using MassTransit.PostgresOutbox.Demo.Consumer.Context;
+using MassTransit.EfCoreOutbox;
+using MassTransit.EfCoreOutbox.Demo.Consumer.Context;
+using MassTransit.EfCoreOutbox.Extensions;
 using MassTransit.PostgresOutbox.Demo.Shared.Extensions;
-using MassTransit.PostgresOutbox.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,9 +9,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 builder.AddMassTransit(typeof(Program).Assembly);
 
-builder.AddPostgresContext<ConsumerContext>(
-   "Server=localhost;Port=5432;Database=nuget_consumer_demo;User Id=test;Password=test;Include Error Detail=True;");
-builder.Services.AddOutboxInboxServices<ConsumerContext>(new Settings
+builder.AddSqliteContext<EfCoreConsumerContext>("Data Source=efcore_consumer.db");
+builder.Services.AddOutboxInboxServices<EfCoreConsumerContext>(new Settings
 {
    InboxRetryEnabled = true,
    InboxRetryIntervals =
@@ -27,7 +26,13 @@ builder.Services.AddOutboxInboxServices<ConsumerContext>(new Settings
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+   var db = scope.ServiceProvider.GetRequiredService<EfCoreConsumerContext>();
+   await db.Database.EnsureCreatedAsync();
+}
+
 app.MapOpenApi();
-app.MigrateDatabase<ConsumerContext>();
 
 app.Run();

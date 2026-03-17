@@ -1,12 +1,12 @@
-using MassTransit.PostgresOutbox.Abstractions;
-using MassTransit.PostgresOutbox.Demo.Consumer.Context;
+using MassTransit.EfCoreOutbox.Abstractions;
+using MassTransit.EfCoreOutbox.Demo.Consumer.Context;
 using MassTransit.PostgresOutbox.Demo.Shared.Events;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace MassTransit.PostgresOutbox.Demo.Consumer.Services;
+namespace MassTransit.EfCoreOutbox.Demo.Consumer.Services;
 
-public class ConsumeService(IServiceProvider sp)
-   : InboxConsumer<ComplexObjectEvent, ConsumerContext>(sp)
+public class EfCoreConsumeService(IServiceProvider sp)
+   : InboxConsumer<ComplexObjectEvent, EfCoreConsumerContext>(sp)
 {
    protected override Task ConsumeAsync(ComplexObjectEvent message,
       IDbContextTransaction dbContextTransaction,
@@ -14,7 +14,7 @@ public class ConsumeService(IServiceProvider sp)
    {
       var original = ComplexObjectEvent.Init();
       var match = message.Equals(original);
-      Console.WriteLine($"[Postgres Consumer] ComplexObjectEvent received — match: {match}");
+      Console.WriteLine($"[EfCore Consumer] ComplexObjectEvent received — match: {match}");
       return Task.CompletedTask;
    }
 }

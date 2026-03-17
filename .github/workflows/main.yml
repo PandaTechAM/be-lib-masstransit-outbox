@@ -37,8 +37,8 @@ jobs:
       - name: Pack PostgresOutbox
         run: dotnet pack src/MassTransit.PostgresOutbox/MassTransit.PostgresOutbox.csproj --no-build --configuration Release --output ${{ env.OUTPUT_DIR }}
 
-      - name: Pack SQLiteOutbox
-        run: dotnet pack src/MassTransit.SQLiteOutbox/MassTransit.SQLiteOutbox.csproj --no-build --configuration Release --output ${{ env.OUTPUT_DIR }}
+      - name: Pack EfCoreOutbox
+        run: dotnet pack src/MassTransit.EfCoreOutbox/MassTransit.EfCoreOutbox.csproj --no-build --configuration Release --output ${{ env.OUTPUT_DIR }}
 
       - name: Publish packages
         env:
