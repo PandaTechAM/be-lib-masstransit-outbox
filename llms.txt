@@ -1,0 +1,37 @@
+# Pandatech MassTransit Outbox
+
+> Outbox and inbox pattern implementation for MassTransit with multiple DbContext support. Two independent NuGet packages: PostgreSQL-specific (FOR UPDATE SKIP LOCKED) and provider-agnostic EF Core (lease-based concurrency).
+
+This library solves a limitation of MassTransit's built-in transactional outbox, which only supports a single DbContext. These packages let you reliably publish and consume messages across many modules, each with its own DbContext — designed for modular monolith and microservice architectures.
+
+- Packages: `Pandatech.MassTransit.PostgresOutbox`, `Pandatech.MassTransit.EfCoreOutbox`
+- License: MIT
+- Targets: net9.0, net10.0
+- Dependencies: MassTransit, EF Core
+
+## Documentation
+
+- [README](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/README.md): Full usage guide, quick start, settings reference, architecture explanation
+
+## Source — PostgresOutbox
+
+- [InboxConsumer](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.PostgresOutbox/Abstractions/InboxConsumer.cs): Base consumer with FOR UPDATE SKIP LOCKED and database-backed retry
+- [OutboxMessagePublisherService](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.PostgresOutbox/Jobs/OutboxMessagePublisherService.cs): Background service that polls and publishes outbox messages
+- [InboxMessageRetryService](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.PostgresOutbox/Jobs/InboxMessageRetryService.cs): Background service that re-dispatches failed inbox messages
+- [ServiceCollectionExtensions](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.PostgresOutbox/Extensions/ServiceCollectionExtensions.cs): DI registration methods
+- [Settings](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.PostgresOutbox/Settings.cs): Configuration for all background services
+
+## Source — EfCoreOutbox
+
+- [InboxConsumer](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.EfCoreOutbox/Abstractions/InboxConsumer.cs): Base consumer with lease-based concurrency, lease theft detection, and database-backed retry
+- [OutboxMessagePublisherService](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.EfCoreOutbox/Jobs/OutboxMessagePublisherService.cs): Background service with lease-acquire-verify-publish pattern
+- [InboxMessageRetryService](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.EfCoreOutbox/Jobs/InboxMessageRetryService.cs): Background service that re-dispatches failed inbox messages with lease-aware filtering
+- [ServiceCollectionExtensions](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.EfCoreOutbox/Extensions/ServiceCollectionExtensions.cs): DI registration methods
+- [Settings](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.EfCoreOutbox/Settings.cs): Configuration including LeaseDuration for the lease-based strategy
+
+## Optional
+
+- [OutboxDbContextExtensions](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.PostgresOutbox/Extensions/OutboxDbContextExtensions.cs): AddToOutbox / AddToOutboxRange helper methods
+- [ModelBuilderExtensions](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.PostgresOutbox/Extensions/ModelBuilderExtensions.cs): EF Core entity configuration
+- [OutboxMessage](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.PostgresOutbox/Entities/OutboxMessage.cs): Outbox entity definition
+- [InboxMessage](https://github.com/PandaTechAM/be-lib-masstransit-outbox/blob/main/src/MassTransit.PostgresOutbox/Entities/InboxMessage.cs): Inbox entity with retry fields

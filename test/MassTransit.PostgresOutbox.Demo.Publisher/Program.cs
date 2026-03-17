@@ -15,7 +15,6 @@ builder.AddPostgresContext<PublisherContext>(
 builder.Services.AddOutboxInboxServices<PublisherContext>();
 builder.Services.AddScoped<PublishService>();
 
-
 var app = builder.Build();
 
 app.MigrateDatabase<PublisherContext>();
@@ -26,8 +25,16 @@ app.MapPost("/publish",
    async ([FromServices] PublishService service) =>
    {
       await service.PublishComplexEventAsync();
+      Console.WriteLine("[Postgres Publisher] Published complex event");
       return Results.Ok();
    });
 
+app.MapPost("/publish-flaky",
+   async ([FromServices] PublishService service) =>
+   {
+      await service.PublishFlakyEventAsync();
+      Console.WriteLine("[Postgres Publisher] Published flaky event (80% fail rate on consumer)");
+      return Results.Ok();
+   });
 
 app.Run();

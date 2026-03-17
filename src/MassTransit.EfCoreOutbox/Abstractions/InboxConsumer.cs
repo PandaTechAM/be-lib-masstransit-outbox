@@ -1,16 +1,20 @@
-﻿using System.Data;
 using System.Text.Json;
-using EFCore.PostgresExtensions.Enums;
-using EFCore.PostgresExtensions.Extensions;
-using MassTransit.PostgresOutbox.Entities;
-using MassTransit.PostgresOutbox.Enums;
+using MassTransit.EfCoreOutbox.Entities;
+using MassTransit.EfCoreOutbox.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace MassTransit.PostgresOutbox.Abstractions;
+namespace MassTransit.EfCoreOutbox.Abstractions;
 
+/// <summary>
+///    Base class for idempotent message consumption using the inbox pattern with EF Core.
+///    Inherit from this class and implement <see cref="ConsumeAsync(TMessage, IDbContextTransaction, CancellationToken)" />
+///    to process messages exactly once. Concurrency is controlled via a lease-based strategy.
+/// </summary>
+/// <typeparam name="TMessage">The message type to consume.</typeparam>
+/// <typeparam name="TDbContext">The <see cref="DbContext" /> type that implements <see cref="IInboxDbContext" />.</typeparam>
 public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
    where TMessage : class
    where TDbContext : DbContext, IInboxDbContext
@@ -48,7 +52,9 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
                ConsumerId = _consumerId,
                Payload = settings.InboxRetryEnabled ? JsonSerializer.Serialize(context.Message) : null,
                Type = settings.InboxRetryEnabled ? GetVersionAgnosticTypeName() : null,
-               DestinationAddress = settings.InboxRetryEnabled ? context.ReceiveContext.InputAddress?.ToString() : null
+               DestinationAddress = settings.InboxRetryEnabled
+                  ? context.ReceiveContext.InputAddress?.ToString()
+                  : null
             });
             await dbContext.SaveChangesAsync(ct);
          }
@@ -58,30 +64,61 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
          }
       }
 
+      // Atomically try to lease the message (replaces FOR UPDATE SKIP LOCKED)
+      var utcNow = DateTime.UtcNow;
+      var leaseExpiry = utcNow.Add(settings.LeaseDuration);
 
-      await using var transactionScope = await dbContext.Database
-                                                        .BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+      var leased = await dbContext.InboxMessages
+                                  .Where(x => x.MessageId == messageId)
+                                  .Where(x => x.ConsumerId == _consumerId)
+                                  .Where(x => x.State == MessageState.New)
+                                  .Where(x => x.LeasedUntil == null || x.LeasedUntil < utcNow)
+                                  .ExecuteUpdateAsync(
+                                     x => x.SetProperty(m => m.LeasedUntil, leaseExpiry),
+                                     ct);
 
-      var inboxMessage = await dbContext.InboxMessages
-                                        .Where(x => x.MessageId == messageId)
-                                        .Where(x => x.ConsumerId == _consumerId)
-                                        .Where(x => x.State == MessageState.New)
-                                        .ForUpdate(LockBehavior.SkipLocked)
-                                        .FirstOrDefaultAsync(ct);
-      if (inboxMessage is null)
+      if (leased == 0)
       {
-         await transactionScope.RollbackAsync(CancellationToken.None);
          return;
       }
+
+      // Read retry count for potential retry handling (only when retry is enabled)
+      int currentRetryCount = 0;
+      if (settings.InboxRetryEnabled)
+      {
+         currentRetryCount = await dbContext.InboxMessages
+                                            .Where(x => x.MessageId == messageId && x.ConsumerId == _consumerId)
+                                            .Select(x => x.RetryCount)
+                                            .FirstOrDefaultAsync(ct);
+      }
+
+      await using var transactionScope = await dbContext.Database
+                                                        .BeginTransactionAsync(ct);
 
       try
       {
          await ConsumeAsync(context.Message, transactionScope, ct);
 
-         inboxMessage.State = MessageState.Done;
-         inboxMessage.UpdatedAt = DateTime.UtcNow;
-
+         // Persist any domain changes the consumer made via the DbContext
          await dbContext.SaveChangesAsync(ct);
+
+         // Mark as done only if our lease is still valid — if another consumer stole the
+         // lease (because processing exceeded LeaseDuration), this returns 0 and we roll
+         // back to avoid overwriting the other consumer's result.
+         var updated = await dbContext.InboxMessages
+                                      .Where(x => x.MessageId == messageId && x.ConsumerId == _consumerId)
+                                      .Where(x => x.LeasedUntil == leaseExpiry)
+                                      .ExecuteUpdateAsync(
+                                         x => x.SetProperty(m => m.State, MessageState.Done)
+                                               .SetProperty(m => m.UpdatedAt, DateTime.UtcNow),
+                                         ct);
+
+         if (updated == 0)
+         {
+            await transactionScope.RollbackAsync(ct);
+            return;
+         }
+
          await transactionScope.CommitAsync(ct);
       }
       catch (Exception ex)
@@ -92,16 +129,25 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
 
          if (!settings.InboxRetryEnabled)
          {
+            // Release the lease so the message can be retried by MassTransit.
+            // Lease check prevents overwriting state if another consumer took over.
+            await dbContext.InboxMessages
+                           .Where(x => x.MessageId == messageId && x.ConsumerId == _consumerId)
+                           .Where(x => x.LeasedUntil == leaseExpiry)
+                           .ExecuteUpdateAsync(
+                              x => x.SetProperty(m => m.LeasedUntil, (DateTime?)null)
+                                    .SetProperty(m => m.UpdatedAt, DateTime.UtcNow),
+                              CancellationToken.None);
             throw;
          }
 
-         var newRetryCount = inboxMessage.RetryCount + 1;
+         var newRetryCount = currentRetryCount + 1;
 
          var isFailed = newRetryCount > settings.InboxRetryIntervals.Length;
 
          var nextRetryAt = isFailed
             ? (DateTime?)null
-            : RetryDelayCalculator.ComputeNextRetryAt(inboxMessage.RetryCount, settings);
+            : RetryDelayCalculator.ComputeNextRetryAt(currentRetryCount, settings);
 
          var newState = isFailed ? MessageState.Failed : MessageState.New;
 
@@ -112,13 +158,17 @@ public abstract class InboxConsumer<TMessage, TDbContext> : IConsumer<TMessage>
             errorMessage = errorMessage[..4000];
          }
 
+         // Update retry state and release lease — lease check prevents overwriting
+         // state if another consumer took over after our lease expired.
          await dbContext.InboxMessages
                         .Where(x => x.MessageId == messageId && x.ConsumerId == _consumerId)
+                        .Where(x => x.LeasedUntil == leaseExpiry)
                         .ExecuteUpdateAsync(x => x.SetProperty(p => p.UpdatedAt, DateTime.UtcNow)
                                                   .SetProperty(p => p.RetryCount, newRetryCount)
                                                   .SetProperty(p => p.State, newState)
                                                   .SetProperty(p => p.NextRetryAt, nextRetryAt)
-                                                  .SetProperty(p => p.LastError, errorMessage),
+                                                  .SetProperty(p => p.LastError, errorMessage)
+                                                  .SetProperty(p => p.LeasedUntil, (DateTime?)null),
                            CancellationToken.None);
 
          if (isFailed)
@@ -159,10 +209,7 @@ internal static partial class InboxLog
 
    [LoggerMessage(Level = LogLevel.Warning,
       Message = "Inbox message {MessageId} for {ConsumerId} scheduled for retry {RetryCount} at {NextRetryAt}")]
-   public static partial void RetryScheduled(ILogger logger,
-      Guid? messageId,
-      string consumerId,
-      int retryCount,
+   public static partial void RetryScheduled(ILogger logger, Guid? messageId, string consumerId, int retryCount,
       DateTime nextRetryAt);
 
    [LoggerMessage(Level = LogLevel.Error,

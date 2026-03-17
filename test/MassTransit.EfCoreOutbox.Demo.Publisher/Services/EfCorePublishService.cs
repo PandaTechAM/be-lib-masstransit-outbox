@@ -1,10 +1,10 @@
-using MassTransit.PostgresOutbox.Demo.Context;
+using MassTransit.EfCoreOutbox.Demo.Publisher.Context;
+using MassTransit.EfCoreOutbox.Extensions;
 using MassTransit.PostgresOutbox.Demo.Shared.Events;
-using MassTransit.PostgresOutbox.Extensions;
 
-namespace MassTransit.PostgresOutbox.Demo.Services;
+namespace MassTransit.EfCoreOutbox.Demo.Publisher.Services;
 
-public class PublishService(PublisherContext dbContext)
+public class EfCorePublishService(EfCorePublisherContext dbContext)
 {
    public async Task PublishComplexEventAsync()
    {

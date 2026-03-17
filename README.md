@@ -1,4 +1,4 @@
-﻿# Pandatech MassTransit Outbox
+# Pandatech MassTransit Outbox
 
 Outbox and inbox pattern implementation for [MassTransit](https://masstransit-project.com/) with **multiple DbContext
 support**.
@@ -7,13 +7,25 @@ MassTransit's built-in outbox only supports a single `DbContext`. These packages
 messages across many modules, each with its own `DbContext` — designed for modular monolith and microservice
 architectures.
 
-| Package                                | Provider   | Concurrency strategy        |
-|----------------------------------------|------------|-----------------------------|
-| `Pandatech.MassTransit.PostgresOutbox` | PostgreSQL | `FOR UPDATE SKIP LOCKED`    |
-| `Pandatech.MassTransit.SQLiteOutbox`   | SQLite     | Lease-based (`LeasedUntil`) |
+| Package                                | Provider             | Concurrency strategy        |
+|----------------------------------------|----------------------|-----------------------------|
+| `Pandatech.MassTransit.PostgresOutbox` | PostgreSQL           | `FOR UPDATE SKIP LOCKED`    |
+| `Pandatech.MassTransit.EfCoreOutbox`   | Any EF Core provider | Lease-based (`LeasedUntil`) |
 
-Both packages are **wire-compatible** — a service using PostgreSQL for its outbox can publish to a service using SQLite
-for its inbox, and vice versa.
+## Why these packages exist
+
+**Why not MassTransit's built-in outbox?** MassTransit's transactional outbox is tied to a single `DbContext`. In a
+modular monolith where each module has its own database context, that limitation forces an architectural compromise. We
+built our own to support any number of `DbContext` instances natively.
+
+**Why PostgreSQL first?** PostgreSQL's `FOR UPDATE SKIP LOCKED` gives us true row-level locking with zero contention —
+the most efficient concurrency strategy for outbox polling. It was the natural starting point for a production-grade
+implementation.
+
+**Why a separate EF Core package?** Not every service runs on PostgreSQL. The EF Core package uses a lease-based
+concurrency strategy that works with any relational database supported by EF Core — SQLite, SQL Server, MySQL, or
+PostgreSQL itself. If you're on PostgreSQL and want maximum efficiency, use the PostgreSQL package. For everything else,
+use the EF Core package.
 
 ## Features
 
@@ -22,25 +34,27 @@ for its inbox, and vice versa.
   service
 - **Inbox pattern** — idempotent message consumption prevents duplicate processing
 - **Database-backed inbox retry** — failed messages are retried with configurable delay intervals, surviving process
-  restarts and deployments (PostgreSQL only)
-- **Background cleanup** — processed and failed messages are automatically removed after a configurable retention period
+  restarts and deployments
+- **Background cleanup** — processed messages are automatically removed after a configurable retention period
 - **Zero-allocation logging** — uses `[LoggerMessage]` source generators throughout
-- **Multi-TFM** — targets `net9.0`, and `net10.0`
+- **Multi-TFM** — targets `net9.0` and `net10.0`
+- **Wire-compatible** — both packages serialize messages identically (`System.Text.Json`, same MassTransit header
+  convention), so they interoperate seamlessly via the shared message broker
 
 ## Installation
 
 ```bash
-# PostgreSQL
+# PostgreSQL (recommended when running on PostgreSQL)
 dotnet add package Pandatech.MassTransit.PostgresOutbox
 
-# SQLite
-dotnet add package Pandatech.MassTransit.SqliteOutbox
+# EF Core (any relational database provider)
+dotnet add package Pandatech.MassTransit.EfCoreOutbox
 ```
 
 ## Quick start
 
-The API surface is identical for both providers. Examples below use the PostgreSQL package — replace the namespace with
-`MassTransit.SQLiteOutbox` for SQLite.
+The API surface is identical for both packages. Examples below use the PostgreSQL package — replace the namespace with
+`MassTransit.EfCoreOutbox` for the EF Core package.
 
 ### 1. Configure your DbContext
 
@@ -110,7 +124,7 @@ services.AddInboxRemovalJob<OrdersDbContext>();
 services.AddInboxRetryJob<OrdersDbContext>();
 ```
 
-> **SQLite only** — `Settings` has an additional `LeaseDuration` property (default: 5 minutes) that controls how long a
+> **EF Core only** — `Settings` has an additional `LeaseDuration` property (default: 5 minutes) that controls how long a
 > message is leased before becoming available for reprocessing after a crash.
 
 ### 3. Publish messages (outbox)
@@ -163,7 +177,7 @@ public class OrderCreatedConsumer(IServiceProvider sp)
 ```
 
 The base class handles deduplication (by `MessageId` + `ConsumerId`) and concurrency. In PostgreSQL this uses
-`FOR UPDATE SKIP LOCKED`; in SQLite it uses atomic lease acquisition.
+`FOR UPDATE SKIP LOCKED`; in the EF Core package it uses atomic lease acquisition.
 
 ## How it works
 
@@ -176,11 +190,11 @@ MassTransit, and marks them as done → a cleanup service deletes old processed 
 ### Inbox flow
 
 MassTransit delivers a message to your `InboxConsumer` → the base class inserts or finds the `InboxMessage` row →
-acquires an exclusive lock (PostgreSQL) or lease (SQLite) → calls your `ConsumeAsync` method → marks the message as done
-and commits → if your code throws, the transaction rolls back and the message is retried by MassTransit's in-memory
+acquires an exclusive lock (PostgreSQL) or lease (EF Core) → calls your `ConsumeAsync` method → marks the message as
+done and commits → if your code throws, the transaction rolls back and the message is retried by MassTransit's in-memory
 retry/redelivery (default) or by the database-backed retry service (when enabled).
 
-### Inbox retry (PostgreSQL only)
+### Inbox retry
 
 When `InboxRetryEnabled = true`, the consumer **never re-throws** — instead it records the failure in the database with
 a `RetryCount` and a `NextRetryAt` timestamp computed from the `InboxRetryIntervals` array. A background service polls
@@ -190,7 +204,8 @@ and crashes.
 When `InboxRetryEnabled = false` (default), the consumer re-throws the exception so MassTransit's own
 `UseMessageRetry` / `UseDelayedRedelivery` policies handle it instead.
 
-> **These two mechanisms are mutually exclusive.** When inbox retry is enabled the consumer never throws, so MassTransit's
+> **These two mechanisms are mutually exclusive.** When inbox retry is enabled the consumer never throws, so
+> MassTransit's
 > in-memory retry and redelivery filters will not trigger. Choose one or the other.
 
 Configuration mirrors MassTransit's `UseDelayedRedelivery(r => r.Intervals(…))` API:
@@ -215,27 +230,21 @@ services.AddOutboxInboxServices<OrdersDbContext>(new Settings
 
 Once all intervals are exhausted the message is marked as `Failed` and will not be retried again.
 
-## Cross-provider compatibility
-
-Both packages serialize messages identically (`System.Text.Json`, same MassTransit header convention), so they are fully
-wire-compatible. A modular monolith can have some modules using PostgreSQL and others using SQLite — messages flow
-seamlessly between them via the shared message broker.
-
 ## Settings reference
 
-| Property                        | Default      | Description                                                         |
-|---------------------------------|--------------|---------------------------------------------------------------------|
-| `PublisherTimerPeriod`          | 1 second     | How often the publisher polls for new outbox messages               |
-| `PublisherBatchCount`           | 100          | Max messages published per tick                                     |
-| `OutboxRemovalBeforeInDays`     | 5            | Days to retain processed outbox messages                            |
-| `OutboxRemovalTimerPeriod`      | 1 day        | How often outbox cleanup runs                                       |
-| `InboxRemovalBeforeInDays`      | 5            | Days to retain processed/failed inbox messages                      |
-| `InboxRemovalTimerPeriod`       | 1 day        | How often inbox cleanup runs                                        |
-| `InboxRetryEnabled`             | `false`      | Enable database-backed inbox retry (PostgreSQL only)                |
-| `InboxRetryIntervals`           | 10 s → 24 h  | Delay before each retry attempt; array length = max retry count     |
-| `InboxRetryPollInterval`        | 5 seconds    | How often the retry service polls for due messages                  |
-| `InboxRetryBatchCount`          | 50           | Max messages retried per tick                                       |
-| `LeaseDuration` *(SQLite only)* | 5 minutes    | How long a message lease is held                                    |
+| Property                    | Default     | Description                                                     |
+|-----------------------------|-------------|-----------------------------------------------------------------|
+| `PublisherTimerPeriod`      | 1 second    | How often the publisher polls for new outbox messages           |
+| `PublisherBatchCount`       | 100         | Max messages published per tick                                 |
+| `OutboxRemovalBeforeInDays` | 5           | Days to retain processed outbox messages                        |
+| `OutboxRemovalTimerPeriod`  | 1 day       | How often outbox cleanup runs                                   |
+| `InboxRemovalBeforeInDays`  | 5           | Days to retain processed inbox messages                         |
+| `InboxRemovalTimerPeriod`   | 1 day       | How often inbox cleanup runs                                    |
+| `InboxRetryEnabled`         | `false`     | Enable database-backed inbox retry                              |
+| `InboxRetryIntervals`       | 10 s → 24 h | Delay before each retry attempt; array length = max retry count |
+| `InboxRetryPollInterval`    | 5 seconds   | How often the retry service polls for due messages              |
+| `InboxRetryBatchCount`      | 50          | Max messages retried per tick                                   |
+| `LeaseDuration` *(EF Core)* | 5 minutes   | How long a message lease is held                                |
 
 ## License
 

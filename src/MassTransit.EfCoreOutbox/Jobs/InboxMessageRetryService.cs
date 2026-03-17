@@ -1,12 +1,12 @@
-﻿using System.Text.Json;
-using MassTransit.PostgresOutbox.Abstractions;
-using MassTransit.PostgresOutbox.Enums;
+using System.Text.Json;
+using MassTransit.EfCoreOutbox.Abstractions;
+using MassTransit.EfCoreOutbox.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace MassTransit.PostgresOutbox.Jobs;
+namespace MassTransit.EfCoreOutbox.Jobs;
 
 internal class InboxMessageRetryService<TDbContext>(
    IServiceScopeFactory serviceScopeFactory,
@@ -34,6 +34,7 @@ internal class InboxMessageRetryService<TDbContext>(
                                           .Where(x => x.State == MessageState.New)
                                           .Where(x => x.RetryCount > 0)
                                           .Where(x => x.NextRetryAt <= utcNow)
+                                          .Where(x => x.LeasedUntil == null || x.LeasedUntil < utcNow)
                                           .OrderBy(x => x.NextRetryAt)
                                           .Take(_batchCount)
                                           .ToListAsync(stoppingToken);
@@ -73,11 +74,17 @@ internal class InboxMessageRetryService<TDbContext>(
 
                   var endpoint = await bus.GetSendEndpoint(new Uri(message.DestinationAddress));
 
-                  await endpoint.Send(messageObject!,
-                     type,
+                  await endpoint.Send(messageObject!, type,
                      Pipe.Execute<SendContext>(ctx =>
                         ctx.Headers.Set(Constants.OutboxMessageIdHeaderName, message.MessageId)),
                      stoppingToken);
+
+                  // Push NextRetryAt forward to cover the gap between dispatch and the
+                  // consumer acquiring its lease. Once the consumer holds the lease, the
+                  // LeasedUntil filter prevents further re-dispatches regardless of NextRetryAt.
+                  // If the message is lost in the broker, the retry service picks it up again
+                  // after LeaseDuration expires.
+                  message.NextRetryAt = DateTime.UtcNow.Add(settings.LeaseDuration);
                }
                catch (Exception ex)
                {

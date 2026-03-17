@@ -16,8 +16,8 @@
         <PackageIcon>pandatech.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
-        <Version>5.2.0</Version>
-        <PackageReleaseNotes>Added Support for database backed retry mechanism (Currently PostgresSql only)</PackageReleaseNotes>
+        <Version>6.0.0</Version>
+        <PackageReleaseNotes>Replace SQLite package with provider-agnostic EF Core outbox package; fix inbox retry duplicate dispatch and failed message cleanup</PackageReleaseNotes>
 
         <!-- Build quality -->
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
