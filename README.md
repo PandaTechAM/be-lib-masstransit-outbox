@@ -154,6 +154,35 @@ Both methods return the generated outbox message ID(s) for correlation if needed
 
 The background publisher picks up new messages, publishes them via MassTransit, and marks them as done.
 
+### 3a. Send to specific endpoints (targeted delivery)
+
+When you need to deliver a message to a specific endpoint rather than broadcasting to all subscribers, use the
+`AddToOutbox` overloads that accept a destination `Uri`. The background publisher will use MassTransit `Send` instead of
+`Publish` for these messages.
+
+**Single destination:**
+
+```csharp
+dbContext.AddToOutbox(
+    new ConfigUpdatedEvent { DeviceId = deviceId },
+    new Uri("queue:device-42"));
+
+await dbContext.SaveChangesAsync();
+```
+
+**Multiple destinations (same message):**
+
+```csharp
+var destinations = deviceIds.Select(id => new Uri($"queue:device-{id}"));
+
+dbContext.AddToOutbox(new ConfigUpdatedEvent { Version = 5 }, destinations);
+
+await dbContext.SaveChangesAsync();
+```
+
+One outbox row is created per destination. All rows share the same serialized payload and are delivered independently.
+Messages without a destination continue to use `Publish` — existing code is unaffected.
+
 ### 4. Consume messages (inbox)
 
 Create a consumer that inherits from `InboxConsumer<TMessage, TDbContext>`:
@@ -184,8 +213,8 @@ The base class handles deduplication (by `MessageId` + `ConsumerId`) and concurr
 ### Outbox flow
 
 Your code calls `AddToOutbox()` + `SaveChangesAsync()` → the message is persisted in the `OutboxMessages` table
-atomically with your domain changes → a background `HostedService` polls for new messages, publishes them via
-MassTransit, and marks them as done → a cleanup service deletes old processed messages.
+atomically with your domain changes → a background `HostedService` polls for new messages, publishes (or sends, when a
+destination is specified) them via MassTransit, and marks them as done → a cleanup service deletes old processed messages.
 
 ### Inbox flow
 

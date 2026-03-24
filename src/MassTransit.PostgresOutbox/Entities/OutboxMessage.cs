@@ -8,6 +8,7 @@ public class OutboxMessage
    public MessageState State { get; set; } = MessageState.New;
    public required string Payload { get; set; }
    public required string Type { get; set; }
+   public string? DestinationAddress { get; set; }
    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
    public DateTime? UpdatedAt { get; set; }
 }

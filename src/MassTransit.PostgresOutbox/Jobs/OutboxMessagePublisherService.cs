@@ -65,10 +65,21 @@ internal class OutboxMessagePublisherService<TDbContext>(
 
                      var messageObject = JsonSerializer.Deserialize(message.Payload, type);
 
-                     await bus.Publish(messageObject!,
-                        type,
-                        x => x.Headers.Set(Constants.OutboxMessageIdHeaderName, message.Id),
-                        stoppingToken);
+                     if (message.DestinationAddress is not null)
+                     {
+                        var endpoint = await bus.GetSendEndpoint(new Uri(message.DestinationAddress));
+                        await endpoint.Send(messageObject!,
+                           type,
+                           x => x.Headers.Set(Constants.OutboxMessageIdHeaderName, message.Id),
+                           stoppingToken);
+                     }
+                     else
+                     {
+                        await bus.Publish(messageObject!,
+                           type,
+                           x => x.Headers.Set(Constants.OutboxMessageIdHeaderName, message.Id),
+                           stoppingToken);
+                     }
 
                      publishedMessageIds.Add(message.Id);
                   }
