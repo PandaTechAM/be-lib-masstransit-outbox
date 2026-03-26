@@ -28,6 +28,12 @@ public class OutboxMessage
    public required string Type { get; set; }
 
    /// <summary>
+   ///    Optional destination endpoint address. When set, the message is sent directly
+   ///    to this endpoint instead of being published to all subscribers.
+   /// </summary>
+   public string? DestinationAddress { get; set; }
+
+   /// <summary>
    ///    Timestamp when the message was added to the outbox.
    /// </summary>
    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

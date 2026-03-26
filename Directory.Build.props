@@ -16,8 +16,8 @@
         <PackageIcon>pandatech.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
-        <Version>6.0.0</Version>
-        <PackageReleaseNotes>Replace SQLite package with provider-agnostic EF Core outbox package; fix inbox retry duplicate dispatch and failed message cleanup</PackageReleaseNotes>
+        <Version>7.0.0</Version>
+        <PackageReleaseNotes>Add targeted Send support: new AddToOutbox overloads accepting destination URI for direct endpoint delivery instead of fan-out Publish. Breaking change: new DestinationAddress column on OutboxMessages table requires a migration.</PackageReleaseNotes>
 
         <!-- Build quality -->
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
