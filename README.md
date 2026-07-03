@@ -154,6 +154,11 @@ Both methods return the generated outbox message ID(s) for correlation if needed
 
 The background publisher picks up new messages, publishes them via MassTransit, and marks them as done.
 
+Transient publish failures (e.g. broker unavailable) leave the message in `New` state and it is retried on the next
+tick. Non-retryable failures (unresolvable or malformed message type, undeserializable payload, message type rejected
+by the bus, invalid destination URI) mark the message as `Failed` so it cannot head-of-line block newer messages;
+`Failed` outbox messages are kept for manual review and can be re-enqueued by setting their state back to `New`.
+
 ### 3a. Send to specific endpoints (targeted delivery)
 
 When you need to deliver a message to a specific endpoint rather than broadcasting to all subscribers, use the

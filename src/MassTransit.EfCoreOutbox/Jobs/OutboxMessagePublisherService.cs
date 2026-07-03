@@ -1,3 +1,4 @@
+using System.Runtime.Serialization;
 using System.Text.Json;
 using MassTransit.EfCoreOutbox.Abstractions;
 using MassTransit.EfCoreOutbox.Enums;
@@ -69,6 +70,7 @@ internal class OutboxMessagePublisherService<TDbContext>(
 
             // Publish each message
             var publishedMessageIds = new List<Guid>(messages.Count);
+            var poisonedMessageIds = new List<Guid>();
 
             foreach (var message in messages)
             {
@@ -78,6 +80,7 @@ internal class OutboxMessagePublisherService<TDbContext>(
 
                   if (type is null)
                   {
+                     poisonedMessageIds.Add(message.Id);
                      OutboxPublisherLog.TypeResolutionFailed(logger, message.Id, message.Type);
                      continue;
                   }
@@ -102,25 +105,54 @@ internal class OutboxMessagePublisherService<TDbContext>(
 
                   publishedMessageIds.Add(message.Id);
                }
+               catch (Exception ex) when (ex is ArgumentException
+                                             or JsonException
+                                             or NotSupportedException
+                                             or SerializationException
+                                             or TypeLoadException
+                                             or FileLoadException
+                                             or BadImageFormatException
+                                             or UriFormatException)
+               {
+                  // Deterministic failures (malformed type name, undeserializable payload, message
+                  // type rejected by the bus, bad destination URI) can never succeed on retry.
+                  // Without dead-lettering they would be re-selected after every lease expiry
+                  // forever, head-of-line blocking newer messages.
+                  poisonedMessageIds.Add(message.Id);
+                  OutboxPublisherLog.DeadLettered(logger, message.Id, ex);
+               }
                catch (Exception ex)
                {
                   OutboxPublisherLog.PublishFailed(logger, message.Id, ex);
                }
             }
 
-            if (publishedMessageIds.Count == 0)
+            if (publishedMessageIds.Count == 0 && poisonedMessageIds.Count == 0)
             {
                continue;
             }
 
             var completedAt = DateTime.UtcNow;
 
-            await dbContext.OutboxMessages
-                           .Where(b => publishedMessageIds.Contains(b.Id))
-                           .ExecuteUpdateAsync(
-                              x => x.SetProperty(m => m.State, MessageState.Done)
-                                    .SetProperty(m => m.UpdatedAt, completedAt),
-                              stoppingToken);
+            if (publishedMessageIds.Count > 0)
+            {
+               await dbContext.OutboxMessages
+                              .Where(b => publishedMessageIds.Contains(b.Id))
+                              .ExecuteUpdateAsync(
+                                 x => x.SetProperty(m => m.State, MessageState.Done)
+                                       .SetProperty(m => m.UpdatedAt, completedAt),
+                                 stoppingToken);
+            }
+
+            if (poisonedMessageIds.Count > 0)
+            {
+               await dbContext.OutboxMessages
+                              .Where(b => poisonedMessageIds.Contains(b.Id))
+                              .ExecuteUpdateAsync(
+                                 x => x.SetProperty(m => m.State, MessageState.Failed)
+                                       .SetProperty(m => m.UpdatedAt, completedAt),
+                                 stoppingToken);
+            }
          }
          catch (Exception ex)
          {
@@ -147,4 +179,8 @@ internal static partial class OutboxPublisherLog
    [LoggerMessage(Level = LogLevel.Error,
       Message = "Cannot resolve type '{TypeName}' for outbox message {MessageId}")]
    public static partial void TypeResolutionFailed(ILogger logger, Guid messageId, string typeName);
+
+   [LoggerMessage(Level = LogLevel.Error,
+      Message = "Outbox message {MessageId} failed with a non-retryable error and was marked Failed")]
+   public static partial void DeadLettered(ILogger logger, Guid messageId, Exception ex);
 }
