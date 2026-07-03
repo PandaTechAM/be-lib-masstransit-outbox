@@ -16,8 +16,8 @@
         <PackageIcon>pandatech.png</PackageIcon>
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
-        <Version>7.0.0</Version>
-        <PackageReleaseNotes>Add targeted Send support: new AddToOutbox overloads accepting destination URI for direct endpoint delivery instead of fan-out Publish. Breaking change: new DestinationAddress column on OutboxMessages table requires a migration.</PackageReleaseNotes>
+        <Version>7.1.0</Version>
+        <PackageReleaseNotes>Dead-letter non-retryable outbox publish failures: messages failing with deterministic errors (unresolvable or malformed type name, undeserializable payload, message type rejected by the bus, invalid destination URI) are now marked Failed instead of being retried on every tick forever and head-of-line blocking newer messages. Transient failures (e.g. broker unavailable) are retried as before. Applies to both PostgresOutbox and EfCoreOutbox publishers. No schema change, no migration required.</PackageReleaseNotes>
 
         <!-- Build quality -->
         <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
