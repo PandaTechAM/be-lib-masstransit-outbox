@@ -12,25 +12,25 @@ builder.AddMassTransit(typeof(Program).Assembly);
 builder.AddSqliteContext<EfCoreConsumerContext>("Data Source=efcore_consumer.db");
 builder.Services.AddOutboxInboxServices<EfCoreConsumerContext>(new Settings
 {
-   InboxRetryEnabled = true,
-   InboxRetryIntervals =
-   [
-      TimeSpan.FromSeconds(5),
-      TimeSpan.FromSeconds(7),
-      TimeSpan.FromSeconds(7),
-      TimeSpan.FromSeconds(7),
-      TimeSpan.FromSeconds(8),
-      TimeSpan.FromSeconds(9)
-   ],
-   InboxRetryPollInterval = TimeSpan.FromSeconds(3)
+    InboxRetryEnabled = true,
+    InboxRetryIntervals =
+    [
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(7),
+        TimeSpan.FromSeconds(7),
+        TimeSpan.FromSeconds(7),
+        TimeSpan.FromSeconds(8),
+        TimeSpan.FromSeconds(9)
+    ],
+    InboxRetryPollInterval = TimeSpan.FromSeconds(3)
 });
 
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-   var db = scope.ServiceProvider.GetRequiredService<EfCoreConsumerContext>();
-   await db.Database.EnsureCreatedAsync();
+    var db = scope.ServiceProvider.GetRequiredService<EfCoreConsumerContext>();
+    await db.Database.EnsureCreatedAsync();
 }
 
 app.MapOpenApi();

@@ -5,13 +5,13 @@ namespace MassTransit.PostgresOutbox.Demo.Consumer.Context;
 
 public class ConsumerContextFactory : IDesignTimeDbContextFactory<ConsumerContext>
 {
-   public ConsumerContext CreateDbContext(string[] args)
-   {
-      var optionsBuilder = new DbContextOptionsBuilder<ConsumerContext>();
+    public ConsumerContext CreateDbContext(string[] args)
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<ConsumerContext>();
 
-      optionsBuilder
-         .UseNpgsql();
+        optionsBuilder
+            .UseNpgsql();
 
-      return new ConsumerContext(optionsBuilder.Options);
-   }
+        return new ConsumerContext(optionsBuilder.Options);
+    }
 }

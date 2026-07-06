@@ -1,6 +1,12 @@
 ﻿namespace MassTransit.PostgresOutbox;
 
+/// <summary>
+///     Well-known constants shared by the outbox publisher and inbox consumer.
+/// </summary>
 public static class Constants
 {
-   public const string OutboxMessageIdHeaderName = "OutboxMessageId";
+    /// <summary>
+    ///     Message header carrying the originating outbox message ID, used by the inbox for idempotency.
+    /// </summary>
+    public const string OutboxMessageIdHeaderName = "OutboxMessageId";
 }
