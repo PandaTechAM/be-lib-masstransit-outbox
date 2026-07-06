@@ -3,6 +3,7 @@
 ## Project overview
 
 MassTransit outbox/inbox library with two NuGet packages:
+
 - `Pandatech.MassTransit.PostgresOutbox` — PostgreSQL-specific, uses `FOR UPDATE SKIP LOCKED`
 - `Pandatech.MassTransit.EfCoreOutbox` — provider-agnostic, uses lease-based concurrency
 
@@ -21,20 +22,21 @@ Version is shared via `Directory.Build.props`.
 
 ## C# coding conventions
 
-**Indentation:** 3 spaces for `.cs` files (set in `.editorconfig`).
+**Indentation:** 4 spaces for `.cs` files (set in `.editorconfig`).
 
-**Braces:** Always required for `if`, `for`, `foreach`, `while`, `lock`, `using` — even single-line bodies. This is enforced as a warning.
+**Braces:** Always required for `if`, `for`, `foreach`, `while`, `lock`, `using` — even single-line bodies. This is
+enforced as a warning.
 
 ```csharp
 // correct
 if (condition)
 {
-   return;
+    return;
 }
 
 // wrong — never omit braces
 if (condition)
-   return;
+    return;
 ```
 
 **Namespaces:** File-scoped only (enforced as error).
@@ -47,15 +49,16 @@ namespace MassTransit.PostgresOutbox.Jobs;
 
 ```csharp
 internal class OutboxMessagePublisherService<TDbContext>(
-   IServiceScopeFactory serviceScopeFactory,
-   IBus bus,
-   ILogger<OutboxMessagePublisherService<TDbContext>> logger,
-   Settings settings)
-   : BackgroundService
-   where TDbContext : DbContext, IOutboxDbContext
+    IServiceScopeFactory serviceScopeFactory,
+    IBus bus,
+    ILogger<OutboxMessagePublisherService<TDbContext>> logger,
+    Settings settings)
+    : BackgroundService
+    where TDbContext : DbContext, IOutboxDbContext
 ```
 
-**`var` everywhere:** Use `var` for all local variable declarations — built-in types, apparent types, and non-apparent types.
+**`var` everywhere:** Use `var` for all local variable declarations — built-in types, apparent types, and non-apparent
+types.
 
 **Method chaining:** Chop always (each `.Method()` on its own line, aligned).
 
@@ -71,7 +74,8 @@ var messages = await dbContext.OutboxMessages
 
 **Object/collection initializers:** Chop always (each property on its own line).
 
-**Expression bodies:** Preferred for properties, indexers, accessors, lambdas. Not used for methods, constructors, operators, or local functions.
+**Expression bodies:** Preferred for properties, indexers, accessors, lambdas. Not used for methods, constructors,
+operators, or local functions.
 
 **Nullability:** Enabled project-wide. Null-related diagnostics (CS8600–CS8762) are treated as errors.
 
@@ -83,7 +87,8 @@ var messages = await dbContext.OutboxMessages
 
 ## Architecture notes
 
-- Each package is self-contained with identical directory structure: `Abstractions/`, `Entities/`, `Enums/`, `Extensions/`, `Jobs/`
+- Each package is self-contained with identical directory structure: `Abstractions/`, `Entities/`, `Enums/`,
+  `Extensions/`, `Jobs/`
 - Background services use `BackgroundService` + `PeriodicTimer`
 - Settings are registered as a singleton, not `IOptions<T>`
 - `ExecuteUpdateAsync` / `ExecuteDeleteAsync` for bulk operations (bypasses change tracker)

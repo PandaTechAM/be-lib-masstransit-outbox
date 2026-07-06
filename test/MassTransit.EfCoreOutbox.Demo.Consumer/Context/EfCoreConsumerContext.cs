@@ -6,16 +6,16 @@ using Microsoft.EntityFrameworkCore;
 namespace MassTransit.EfCoreOutbox.Demo.Consumer.Context;
 
 public class EfCoreConsumerContext(DbContextOptions<EfCoreConsumerContext> options) : DbContext(options),
-   IOutboxDbContext, IInboxDbContext
+    IOutboxDbContext, IInboxDbContext
 {
-   public DbSet<InboxMessage> InboxMessages { get; set; }
-   public DbSet<OutboxMessage> OutboxMessages { get; set; }
+    public DbSet<InboxMessage> InboxMessages { get; set; }
+    public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
-   protected override void OnModelCreating(ModelBuilder modelBuilder)
-   {
-      base.OnModelCreating(modelBuilder);
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
 
-      modelBuilder.ApplyConfigurationsFromAssembly(typeof(EfCoreConsumerContext).Assembly);
-      modelBuilder.ConfigureInboxOutboxEntities();
-   }
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(EfCoreConsumerContext).Assembly);
+        modelBuilder.ConfigureInboxOutboxEntities();
+    }
 }

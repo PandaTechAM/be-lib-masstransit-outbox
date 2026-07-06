@@ -219,7 +219,8 @@ The base class handles deduplication (by `MessageId` + `ConsumerId`) and concurr
 
 Your code calls `AddToOutbox()` + `SaveChangesAsync()` → the message is persisted in the `OutboxMessages` table
 atomically with your domain changes → a background `HostedService` polls for new messages, publishes (or sends, when a
-destination is specified) them via MassTransit, and marks them as done → a cleanup service deletes old processed messages.
+destination is specified) them via MassTransit, and marks them as done → a cleanup service deletes old processed
+messages.
 
 ### Inbox flow
 

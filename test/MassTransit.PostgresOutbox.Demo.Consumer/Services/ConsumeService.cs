@@ -6,15 +6,15 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace MassTransit.PostgresOutbox.Demo.Consumer.Services;
 
 public class ConsumeService(IServiceProvider sp)
-   : InboxConsumer<ComplexObjectEvent, ConsumerContext>(sp)
+    : InboxConsumer<ComplexObjectEvent, ConsumerContext>(sp)
 {
-   protected override Task ConsumeAsync(ComplexObjectEvent message,
-      IDbContextTransaction dbContextTransaction,
-      CancellationToken ct)
-   {
-      var original = ComplexObjectEvent.Init();
-      var match = message.Equals(original);
-      Console.WriteLine($"[Postgres Consumer] ComplexObjectEvent received — match: {match}");
-      return Task.CompletedTask;
-   }
+    protected override Task ConsumeAsync(ComplexObjectEvent message,
+        IDbContextTransaction dbContextTransaction,
+        CancellationToken ct)
+    {
+        var original = ComplexObjectEvent.Init();
+        var match = message.Equals(original);
+        Console.WriteLine($"[Postgres Consumer] ComplexObjectEvent received — match: {match}");
+        return Task.CompletedTask;
+    }
 }

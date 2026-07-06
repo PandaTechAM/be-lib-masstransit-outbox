@@ -1,24 +1,24 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <PackageId>Pandatech.MassTransit.PostgresOutbox</PackageId>
-        <Description>Outbox and Inbox pattern implementation for MassTransit with PostgreSQL and EF Core. Supports multiple DbContexts for modular monolith and microservice architectures. Uses PostgreSQL FOR UPDATE SKIP LOCKED for concurrency control.</Description>
-        <PackageTags>masstransit;outbox;inbox;postgresql;postgres;efcore;entity-framework;distributed-systems;modular-monolith;microservices;messaging;reliability</PackageTags>
-    </PropertyGroup>
+  <PropertyGroup>
+    <PackageId>Pandatech.MassTransit.PostgresOutbox</PackageId>
+    <Description>Outbox and Inbox pattern implementation for MassTransit with PostgreSQL and EF Core. Supports multiple DbContexts for modular monolith and microservice architectures. Uses PostgreSQL FOR UPDATE SKIP LOCKED for concurrency control.</Description>
+    <PackageTags>masstransit;outbox;inbox;postgresql;postgres;efcore;entity-framework;distributed-systems;modular-monolith;microservices;messaging;reliability</PackageTags>
+  </PropertyGroup>
 
-    <ItemGroup>
-        <PackageReference Include="MassTransit" Version="8.0.11"/>
-        <PackageReference Include="Pandatech.EFCore.PostgresExtensions" Version="7.0.0"/>
-    </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MassTransit" Version="8.5.10"/>
+    <PackageReference Include="Pandatech.EFCore.PostgresExtensions" Version="7.0.1"/>
+  </ItemGroup>
 
-    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0"/>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0"/>
 
-    </ItemGroup>
+  </ItemGroup>
 
-    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0"/>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0"/>
 
-    </ItemGroup>
+  </ItemGroup>
 
 </Project>

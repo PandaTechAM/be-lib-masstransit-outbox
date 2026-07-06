@@ -1,10 +1,13 @@
 <Project>
-    <!-- Import the root Directory.Build.props (inherits analyzers, version, etc.) -->
-    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))"/>
+  <!-- Import the root Directory.Build.props (inherits analyzers, version, etc.) -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))"/>
 
-    <!-- Override: test/demo projects target only net10.0 and are not packable -->
-    <PropertyGroup>
-        <TargetFrameworks>net10.0</TargetFrameworks>
-        <IsPackable>false</IsPackable>
-    </PropertyGroup>
+  <!-- Override: test/demo projects target only net10.0 and are not packable -->
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+
+    <!-- Non-shipping projects: no XML docs required (suppresses CS1591 across demos/tests) -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
 </Project>
